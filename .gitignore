@@ -205,3 +205,15 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# OMI data files (too large for git, ~2.4 GB)
+data/*.zip
+data/*.csv
+data/*.kml
+
+# Frontend build output and dependencies
+frontend/node_modules/
+frontend/dist/
+
+# Database
+*.sql.bak
