@@ -3,12 +3,12 @@
 Scans a directory of zip files from the Agenzia delle Entrate,
 extracts CSVs and KMLs, and imports everything into the PostGIS database.
 
-Usage:
-    # Reads DATABASE_URL and DATA_DIR from backend/.env
-    python -m backend.scripts.import_omi
+Usage (from backend/):
+    # Reads DATABASE_URL and DATA_DIR from .env
+    python -m scripts.import_omi
 
     # Override via CLI args
-    python -m backend.scripts.import_omi [data_dir] [database_url]
+    python -m scripts.import_omi [data_dir] [database_url]
 
 Each zip contains:
     - 2 CSVs: QI_[YYYY][S]_VALORI.csv (quotations) + QI_[YYYY][S]_ZONE.csv (zone descriptions)
@@ -23,12 +23,12 @@ from zipfile import ZipFile
 
 from sqlalchemy import create_engine, text
 
-from backend.scripts.import_omi_quotations import (
+from scripts.import_omi_quotations import (
     import_quotations,
     import_zone_descriptions,
     parse_semester_from_filename,
 )
-from backend.scripts.import_omi_zones import import_kml_zones_batch
+from scripts.import_omi_zones import import_kml_zones_batch
 
 logging.basicConfig(
     level=logging.INFO,
