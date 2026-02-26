@@ -24,13 +24,17 @@ Personal, non-commercial tool for property valuation across Italian cities and r
 # 1. Start the database (local dev)
 docker compose up -d db
 
-# 2. Import OMI data from ./data/ zip files
-python -m backend.scripts.import_omi ./data/ $DATABASE_URL
+# 2. Configure environment
+cp backend/.env.example backend/.env
+# Edit backend/.env with your database credentials and data directory
 
-# 3. Start the backend
-cd backend && uvicorn app.main:app --reload
+# 3. Import OMI data (reads DATA_DIR and DATABASE_URL from .env)
+cd backend && python -m backend.scripts.import_omi
 
-# 4. Start the frontend
+# 4. Start the backend
+uvicorn app.main:app --reload
+
+# 5. Start the frontend
 cd frontend && npm run dev
 ```
 
