@@ -3,6 +3,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://vendocasa:vendocasa@localhost:5432/vendocasa"
+    data_dir: str = "./data"
     google_geocoding_api_key: str = ""
     cors_origins: str = "http://localhost:5173"
 
