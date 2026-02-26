@@ -142,7 +142,7 @@ def import_quotations(csv_path: str, semester: str, db_url: str) -> int:
     engine = create_engine(db_url)
 
     # Use a chunked insert to handle large files
-    chunk_size = 10000
+    chunk_size = 2000
     total = 0
     for i in range(0, len(output), chunk_size):
         chunk = output.iloc[i : i + chunk_size]
