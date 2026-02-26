@@ -47,9 +47,17 @@ def parse_semester_from_kml(kml_path: str) -> str | None:
 def parse_kml_placemarks(kml_path: str) -> list[dict]:
     """Parse a KML file and extract zone data + geometry for each Placemark.
 
+    Handles 3 KML formats:
+    - 2010_S2, 2013_S2: LINKZONA populated, no CODCOM/CODZONA
+    - 2014_S1: LINKZONA empty, no CODCOM/CODZONA — extract from filename + <name>
+    - 2014_S2+: CODCOM + CODZONA present, LINKZONA empty
+
     Returns a list of dicts with keys:
-        codcom, codzona, geometry (Shapely MultiPolygon)
+        codcom, codzona, link_zona, geometry (Shapely MultiPolygon)
     """
+    # Belfiore code from filename (e.g., A181.kml -> A181)
+    filename_codcom = Path(kml_path).stem
+
     # Read as bytes and handle encoding issues (some KMLs have non-UTF-8 chars)
     raw = Path(kml_path).read_bytes()
     try:
@@ -77,9 +85,24 @@ def parse_kml_placemarks(kml_path: str) -> list[dict]:
 
         codcom = data.get("CODCOM", "")
         codzona = data.get("CODZONA", "")
+        link_zona = data.get("LINKZONA", "")
 
-        if not codcom or not codzona:
-            continue
+        # Three KML formats:
+        # 1. LINKZONA populated directly (2010, 2013)
+        # 2. CODCOM + CODZONA (2014_S2+)
+        # 3. Neither — extract codcom from filename, codzona from <name> tag (2014_S1)
+        if not codcom and not codzona and not link_zona:
+            # Try to extract zone code from <name>: "CITY - Zona OMI R1"
+            name_el = pm.find("{http://www.opengis.net/kml/2.2}name")
+            if name_el is not None and name_el.text:
+                zone_match = re.search(r"Zona\s+OMI\s+(\S+)", name_el.text)
+                if zone_match:
+                    codcom = filename_codcom
+                    codzona = zone_match.group(1)
+                else:
+                    continue
+            else:
+                continue
 
         # Parse all polygons (may be inside MultiGeometry or direct)
         polygons = []
@@ -97,6 +120,7 @@ def parse_kml_placemarks(kml_path: str) -> list[dict]:
         zones.append({
             "codcom": codcom,
             "codzona": codzona,
+            "link_zona": link_zona,
             "geometry": geom,
         })
 
@@ -190,7 +214,7 @@ def import_kml_zones(
                             VALUES
                                 (:link_zona, :zone_code, :fascia, :municipality_istat,
                                  :municipality_name, :province_code, :zone_description,
-                                 :semester, ST_MakeValid(ST_GeomFromText(:wkt, 4326)))
+                                 :semester, ST_Multi(ST_CollectionExtract(ST_MakeValid(ST_GeomFromText(:wkt, 4326)), 3)))
                             ON CONFLICT (link_zona, semester) DO NOTHING
                         """),
                         {
@@ -239,29 +263,45 @@ def import_kml_zones_batch(
     skipped = 0
     batch = []
 
+    # Build reverse index: link_zona -> zone_info (for older KMLs with direct LINKZONA)
+    lz_reverse = {v["link_zona"]: v for v in zone_lookup.values() if v.get("link_zona")}
+
     for kml_path in kml_files:
         placemarks = parse_kml_placemarks(str(kml_path))
         for pm in placemarks:
-            key = (pm["codcom"], pm["codzona"])
-            zone_info = zone_lookup.get(key)
+            # Older KMLs have LINKZONA directly; newer ones need lookup via CODCOM+CODZONA
+            direct_lz = pm.get("link_zona", "")
+            if direct_lz and re.match(r"^[A-Z]{2}\d{8}$", direct_lz):
+                link_zona = direct_lz
+                zone_info = lz_reverse.get(direct_lz, {
+                    "zone_code": "",
+                    "fascia": "",
+                    "municipality_istat": "",
+                    "municipality_name": "",
+                    "province_code": "",
+                    "zone_description": "",
+                })
+            else:
+                key = (pm["codcom"], pm["codzona"])
+                zone_info = zone_lookup.get(key)
 
-            if zone_info is None:
-                skipped += 1
-                continue
+                if zone_info is None:
+                    skipped += 1
+                    continue
 
-            link_zona = zone_info["link_zona"]
-            if not link_zona or not re.match(r"^[A-Z]{2}\d{8}$", link_zona):
-                skipped += 1
-                continue
+                link_zona = zone_info["link_zona"]
+                if not link_zona or not re.match(r"^[A-Z]{2}\d{8}$", link_zona):
+                    skipped += 1
+                    continue
 
             batch.append({
                 "link_zona": link_zona,
-                "zone_code": zone_info["zone_code"],
-                "fascia": zone_info["fascia"],
-                "municipality_istat": zone_info["municipality_istat"],
-                "municipality_name": zone_info["municipality_name"],
-                "province_code": zone_info["province_code"],
-                "zone_description": zone_info["zone_description"],
+                "zone_code": zone_info.get("zone_code", ""),
+                "fascia": zone_info.get("fascia", ""),
+                "municipality_istat": zone_info.get("municipality_istat", ""),
+                "municipality_name": zone_info.get("municipality_name", ""),
+                "province_code": zone_info.get("province_code", ""),
+                "zone_description": zone_info.get("zone_description", ""),
                 "semester": semester,
                 "wkt": pm["geometry"].wkt,
             })
@@ -296,7 +336,7 @@ def _insert_batch(engine, batch: list[dict]) -> int:
                         VALUES
                             (:link_zona, :zone_code, :fascia, :municipality_istat,
                              :municipality_name, :province_code, :zone_description,
-                             :semester, ST_MakeValid(ST_GeomFromText(:wkt, 4326)))
+                             :semester, ST_Multi(ST_CollectionExtract(ST_MakeValid(ST_GeomFromText(:wkt, 4326)), 3)))
                         ON CONFLICT (link_zona, semester) DO NOTHING
                     """),
                     row,
