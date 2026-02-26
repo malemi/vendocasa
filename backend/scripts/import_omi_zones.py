@@ -50,8 +50,19 @@ def parse_kml_placemarks(kml_path: str) -> list[dict]:
     Returns a list of dicts with keys:
         codcom, codzona, geometry (Shapely MultiPolygon)
     """
-    tree = etree.parse(kml_path)
-    root = tree.getroot()
+    # Read as bytes and handle encoding issues (some KMLs have non-UTF-8 chars)
+    raw = Path(kml_path).read_bytes()
+    try:
+        tree = etree.fromstring(raw)
+    except etree.XMLSyntaxError:
+        # Fallback: decode with replacement, then re-parse
+        decoded = raw.decode("utf-8", errors="replace").encode("utf-8")
+        try:
+            tree = etree.fromstring(decoded)
+        except etree.XMLSyntaxError as e:
+            logger.warning(f"Cannot parse KML {kml_path}: {e}")
+            return []
+    root = tree
 
     zones = []
     for pm in root.iter("{http://www.opengis.net/kml/2.2}Placemark"):
