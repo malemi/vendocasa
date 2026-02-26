@@ -141,8 +141,8 @@ def import_quotations(csv_path: str, semester: str, db_url: str) -> int:
 
     engine = create_engine(db_url)
 
-    # Use a chunked insert to handle large files
-    chunk_size = 2000
+    # Insert in chunks using executemany (no parameter limit, psycopg3 pipelines it)
+    chunk_size = 5000
     total = 0
     for i in range(0, len(output), chunk_size):
         chunk = output.iloc[i : i + chunk_size]
@@ -153,7 +153,6 @@ def import_quotations(csv_path: str, semester: str, db_url: str) -> int:
                 schema="omi",
                 if_exists="append",
                 index=False,
-                method="multi",
             )
             total += len(chunk)
         except Exception as e:
