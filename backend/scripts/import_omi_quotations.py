@@ -6,6 +6,7 @@ maps columns to the omi.quotations table schema, and bulk-inserts.
 The CSV has a descriptive title on line 1 and column headers on line 2.
 """
 
+import io
 import logging
 import re
 from pathlib import Path
@@ -139,27 +140,33 @@ def import_quotations(csv_path: str, semester: str, db_url: str) -> int:
 
     output = result[db_cols].copy()
 
+    # Use PostgreSQL COPY for bulk loading (no parameter limits, fastest method)
     engine = create_engine(db_url)
-
-    # Insert in chunks using executemany (no parameter limit, psycopg3 pipelines it)
-    chunk_size = 5000
-    total = 0
-    for i in range(0, len(output), chunk_size):
-        chunk = output.iloc[i : i + chunk_size]
-        try:
-            chunk.to_sql(
-                "quotations",
-                engine,
-                schema="omi",
-                if_exists="append",
-                index=False,
-            )
-            total += len(chunk)
-        except Exception as e:
-            if "duplicate key" in str(e).lower() or "unique" in str(e).lower():
-                logger.info(f"Skipping duplicate chunk at row {i} for {semester}")
-            else:
-                raise
+    raw_conn = engine.raw_connection()
+    try:
+        cursor = raw_conn.cursor()
+        buf = io.StringIO()
+        output.to_csv(buf, sep="\t", header=False, index=False, na_rep="\\N")
+        buf.seek(0)
+        with cursor.copy(
+            "COPY omi.quotations (link_zona, semester, property_type_code,"
+            " property_type_desc, conservation_state, is_prevalent,"
+            " price_min, price_max, surface_type_sale,"
+            " rent_min, rent_max, surface_type_rent) FROM STDIN"
+        ) as copy:
+            while data := buf.read(8192):
+                copy.write(data.encode("utf-8"))
+        raw_conn.commit()
+        total = len(output)
+    except Exception as e:
+        raw_conn.rollback()
+        if "duplicate key" in str(e).lower() or "unique" in str(e).lower():
+            logger.info(f"Skipping duplicates for {semester}")
+            total = 0
+        else:
+            raise
+    finally:
+        raw_conn.close()
 
     logger.info(f"Imported {total} quotation rows for {semester}")
     return total
