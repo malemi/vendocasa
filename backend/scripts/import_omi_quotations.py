@@ -143,6 +143,13 @@ def import_quotations(csv_path: str, semester: str, db_url: str) -> int:
 
     output = result[db_cols].copy()
 
+    # Deduplicate on UNIQUE key (some CSVs have duplicate rows)
+    unique_key = ["link_zona", "semester", "property_type_code", "conservation_state"]
+    before = len(output)
+    output = output.drop_duplicates(subset=unique_key, keep="first")
+    if len(output) < before:
+        logger.info(f"Dropped {before - len(output)} duplicate rows for {semester}")
+
     # Fix data types for PostgreSQL COPY text format
     # Boolean: COPY expects t/f, not True/False
     output["is_prevalent"] = output["is_prevalent"].map({True: "t", False: "f"})
