@@ -179,7 +179,7 @@ def import_kml_zones(
                             VALUES
                                 (:link_zona, :zone_code, :fascia, :municipality_istat,
                                  :municipality_name, :province_code, :zone_description,
-                                 :semester, ST_GeomFromText(:wkt, 4326))
+                                 :semester, ST_MakeValid(ST_GeomFromText(:wkt, 4326)))
                             ON CONFLICT (link_zona, semester) DO NOTHING
                         """),
                         {
@@ -270,11 +270,12 @@ def import_kml_zones_batch(
 
 
 def _insert_batch(engine, batch: list[dict]) -> int:
-    """Insert a batch of zone records."""
+    """Insert a batch of zone records using SAVEPOINTs for error isolation."""
     inserted = 0
     with engine.begin() as conn:
         for row in batch:
             try:
+                conn.execute(text("SAVEPOINT sp"))
                 result = conn.execute(
                     text("""
                         INSERT INTO omi.zones
@@ -284,13 +285,15 @@ def _insert_batch(engine, batch: list[dict]) -> int:
                         VALUES
                             (:link_zona, :zone_code, :fascia, :municipality_istat,
                              :municipality_name, :province_code, :zone_description,
-                             :semester, ST_GeomFromText(:wkt, 4326))
+                             :semester, ST_MakeValid(ST_GeomFromText(:wkt, 4326)))
                         ON CONFLICT (link_zona, semester) DO NOTHING
                     """),
                     row,
                 )
+                conn.execute(text("RELEASE SAVEPOINT sp"))
                 if result.rowcount > 0:
                     inserted += 1
             except Exception as e:
+                conn.execute(text("ROLLBACK TO SAVEPOINT sp"))
                 logger.error(f"Error inserting zone {row['link_zona']}: {e}")
     return inserted

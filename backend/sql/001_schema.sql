@@ -36,7 +36,8 @@ CREATE TABLE omi.quotations (
     surface_type_sale   CHAR(1),                -- L=Lorda (gross), N=Netta (net)
     rent_min            NUMERIC(10,2),          -- EUR/m2/month rent min
     rent_max            NUMERIC(10,2),          -- EUR/m2/month rent max
-    surface_type_rent   CHAR(1)
+    surface_type_rent   CHAR(1),
+    UNIQUE(link_zona, semester, property_type_code, conservation_state)
 );
 CREATE INDEX idx_quot_lookup ON omi.quotations (link_zona, semester);
 CREATE INDEX idx_quot_type ON omi.quotations (property_type_code);
