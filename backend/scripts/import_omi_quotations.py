@@ -44,14 +44,17 @@ def import_quotations(csv_path: str, semester: str, db_url: str) -> int:
     logger.info(f"Reading {csv_path} for semester {semester}")
 
     # Read CSV: skip line 1 (descriptive title), use line 2 as headers
-    df = pd.read_csv(
-        csv_path,
-        sep=";",
-        encoding="utf-8",
-        dtype=str,
-        skiprows=1,  # skip the descriptive title line
-        on_bad_lines="warn",
-    )
+    try:
+        df = pd.read_csv(
+            csv_path, sep=";", encoding="utf-8", dtype=str,
+            skiprows=1, on_bad_lines="warn",
+        )
+    except UnicodeDecodeError:
+        logger.warning(f"UTF-8 decode failed for {csv_path}, falling back to latin-1")
+        df = pd.read_csv(
+            csv_path, sep=";", encoding="latin-1", dtype=str,
+            skiprows=1, on_bad_lines="warn",
+        )
 
     if df.empty:
         logger.warning(f"Empty CSV: {csv_path}")
@@ -77,9 +80,9 @@ def import_quotations(csv_path: str, semester: str, db_url: str) -> int:
                 .apply(pd.to_numeric, errors="coerce")
             )
 
-    # Property type code
+    # Property type code -- use nullable Int64 so COPY writes "20" not "20.0"
     if "Cod_Tip" in df.columns:
-        df["Cod_Tip"] = pd.to_numeric(df["Cod_Tip"], errors="coerce")
+        df["Cod_Tip"] = pd.to_numeric(df["Cod_Tip"], errors="coerce").astype("Int64")
 
     # Prevalent state: "P" -> True, anything else -> False
     if "Stato_prev" in df.columns:
@@ -140,8 +143,27 @@ def import_quotations(csv_path: str, semester: str, db_url: str) -> int:
 
     output = result[db_cols].copy()
 
+    # Fix data types for PostgreSQL COPY text format
+    # Boolean: COPY expects t/f, not True/False
+    output["is_prevalent"] = output["is_prevalent"].map({True: "t", False: "f"})
+    # Replace empty strings with None so they become \N (NULL) in COPY
+    for col in output.select_dtypes(include="object").columns:
+        output[col] = output[col].replace("", None)
+        # Sanitize embedded tabs/newlines that would corrupt TSV
+        output[col] = output[col].str.replace(r"[\t\n\r]", " ", regex=True)
+
     # Use PostgreSQL COPY for bulk loading (no parameter limits, fastest method)
     engine = create_engine(db_url)
+
+    # Delete any existing data for this semester (safe re-import on retry)
+    with engine.begin() as conn:
+        deleted = conn.execute(
+            text("DELETE FROM omi.quotations WHERE semester = :sem"),
+            {"sem": semester},
+        )
+        if deleted.rowcount > 0:
+            logger.info(f"Deleted {deleted.rowcount} existing rows for {semester}")
+
     raw_conn = engine.raw_connection()
     try:
         cursor = raw_conn.cursor()
@@ -182,14 +204,17 @@ def import_zone_descriptions(csv_path: str, semester: str, db_url: str) -> dict:
     """
     logger.info(f"Reading zone descriptions from {csv_path} for semester {semester}")
 
-    df = pd.read_csv(
-        csv_path,
-        sep=";",
-        encoding="utf-8",
-        dtype=str,
-        skiprows=1,
-        on_bad_lines="warn",
-    )
+    try:
+        df = pd.read_csv(
+            csv_path, sep=";", encoding="utf-8", dtype=str,
+            skiprows=1, on_bad_lines="warn",
+        )
+    except UnicodeDecodeError:
+        logger.warning(f"UTF-8 decode failed for {csv_path}, falling back to latin-1")
+        df = pd.read_csv(
+            csv_path, sep=";", encoding="latin-1", dtype=str,
+            skiprows=1, on_bad_lines="warn",
+        )
 
     if df.empty:
         return {}

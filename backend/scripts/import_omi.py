@@ -85,12 +85,15 @@ def reset_schema(db_url: str):
 
 
 def get_existing_semesters(db_url: str) -> set[str]:
-    """Return the set of semesters already imported into omi.zones."""
+    """Return semesters fully imported (present in both zones AND quotations)."""
     engine = create_engine(db_url)
     try:
         with engine.connect() as conn:
-            result = conn.execute(text("SELECT DISTINCT semester FROM omi.zones"))
-            return {row[0] for row in result}
+            zones = conn.execute(text("SELECT DISTINCT semester FROM omi.zones"))
+            quots = conn.execute(text("SELECT DISTINCT semester FROM omi.quotations"))
+            zone_sems = {row[0] for row in zones}
+            quot_sems = {row[0] for row in quots}
+            return zone_sems & quot_sems
     except Exception:
         return set()
 
