@@ -40,21 +40,30 @@ logger = logging.getLogger(__name__)
 def init_schema(db_url: str):
     """Create the OMI schema and tables if they don't exist."""
     schema_sql = (Path(__file__).parent.parent / "sql" / "001_schema.sql").read_text()
+    # Strip SQL comments (lines starting with --) to avoid splitting issues
+    lines = []
+    for line in schema_sql.splitlines():
+        # Remove inline comments but keep the rest of the line
+        comment_pos = line.find("--")
+        if comment_pos >= 0:
+            line = line[:comment_pos]
+        lines.append(line)
+    cleaned_sql = "\n".join(lines)
+
     engine = create_engine(db_url)
     with engine.begin() as conn:
-        # Split on semicolons and execute each statement
-        for statement in schema_sql.split(";"):
+        for statement in cleaned_sql.split(";"):
             stmt = statement.strip()
-            if stmt and not stmt.startswith("--"):
-                try:
-                    conn.execute(text(stmt))
-                except Exception as e:
-                    # Ignore "already exists" errors
-                    err_msg = str(e).lower()
-                    if "already exists" in err_msg or "duplicate" in err_msg:
-                        pass
-                    else:
-                        raise
+            if not stmt:
+                continue
+            try:
+                conn.execute(text(stmt))
+            except Exception as e:
+                err_msg = str(e).lower()
+                if "already exists" in err_msg or "duplicate" in err_msg:
+                    pass
+                else:
+                    raise
     logger.info("Database schema initialized")
 
 
