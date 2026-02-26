@@ -7,6 +7,9 @@ Usage (from backend/):
     # Reads DATABASE_URL and DATA_DIR from .env
     python -m scripts.import_omi
 
+    # Reset database (drop and recreate all OMI tables)
+    python -m scripts.import_omi --reset
+
     # Override via CLI args
     python -m scripts.import_omi [data_dir] [database_url]
 
@@ -15,6 +18,7 @@ Each zip contains:
     - ~7,900 KML files (one per municipality, named by Belfiore code)
 """
 
+import argparse
 import logging
 import sys
 import tempfile
@@ -65,6 +69,19 @@ def init_schema(db_url: str):
                 else:
                     raise
     logger.info("Database schema initialized")
+
+
+def reset_schema(db_url: str):
+    """Drop all OMI tables and recreate them from scratch."""
+    engine = create_engine(db_url)
+    with engine.begin() as conn:
+        conn.execute(text("DROP TABLE IF EXISTS omi.quotations CASCADE"))
+        conn.execute(text("DROP TABLE IF EXISTS omi.zones CASCADE"))
+        conn.execute(text("DROP TABLE IF EXISTS omi.transactions CASCADE"))
+        conn.execute(text("DROP TABLE IF EXISTS omi.geocode_cache CASCADE"))
+        conn.execute(text("DROP SCHEMA IF EXISTS omi CASCADE"))
+    logger.info("Dropped all OMI tables and schema")
+    init_schema(db_url)
 
 
 def get_existing_semesters(db_url: str) -> set[str]:
@@ -187,10 +204,17 @@ def discover_and_import_all(data_dir: str, db_url: str):
 def main():
     from app.config import settings
 
-    data_dir = sys.argv[1] if len(sys.argv) > 1 else settings.data_dir
-    db_url = sys.argv[2] if len(sys.argv) > 2 else settings.database_url
+    parser = argparse.ArgumentParser(description="Import OMI data into PostGIS")
+    parser.add_argument("data_dir", nargs="?", default=settings.data_dir, help="Directory containing OMI zip files")
+    parser.add_argument("database_url", nargs="?", default=settings.database_url, help="PostgreSQL connection string")
+    parser.add_argument("--reset", action="store_true", help="Drop and recreate all OMI tables before importing")
+    args = parser.parse_args()
 
-    discover_and_import_all(data_dir, db_url)
+    if args.reset:
+        logger.info("Resetting database (dropping all OMI tables)...")
+        reset_schema(args.database_url)
+
+    discover_and_import_all(args.data_dir, args.database_url)
 
 
 if __name__ == "__main__":
