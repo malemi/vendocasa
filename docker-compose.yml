@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgis/postgis:16-3.5-alpine
+    image: imresamu/postgis:16-3.5-alpine
     environment:
       POSTGRES_DB: vendocasa
       POSTGRES_USER: vendocasa
