@@ -4,7 +4,11 @@ Scans a directory of zip files from the Agenzia delle Entrate,
 extracts CSVs and KMLs, and imports everything into the PostGIS database.
 
 Usage:
-    python -m backend.scripts.import_omi ./data/ postgresql+psycopg://user:pass@host/db
+    # Reads DATABASE_URL and DATA_DIR from backend/.env
+    python -m backend.scripts.import_omi
+
+    # Override via CLI args
+    python -m backend.scripts.import_omi [data_dir] [database_url]
 
 Each zip contains:
     - 2 CSVs: QI_[YYYY][S]_VALORI.csv (quotations) + QI_[YYYY][S]_ZONE.csv (zone descriptions)
@@ -172,13 +176,10 @@ def discover_and_import_all(data_dir: str, db_url: str):
 
 
 def main():
-    if len(sys.argv) < 3:
-        print("Usage: python -m backend.scripts.import_omi <data_dir> <database_url>")
-        print("Example: python -m backend.scripts.import_omi ./data/ postgresql+psycopg://user:pass@localhost/vendocasa")
-        sys.exit(1)
+    from app.config import settings
 
-    data_dir = sys.argv[1]
-    db_url = sys.argv[2]
+    data_dir = sys.argv[1] if len(sys.argv) > 1 else settings.data_dir
+    db_url = sys.argv[2] if len(sys.argv) > 2 else settings.database_url
 
     discover_and_import_all(data_dir, db_url)
 
