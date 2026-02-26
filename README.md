@@ -29,13 +29,14 @@ cp backend/.env.example backend/.env
 # Edit backend/.env with your database credentials and data directory
 
 # 3. Import OMI data (reads DATA_DIR and DATABASE_URL from .env)
-cd backend && python -m backend.scripts.import_omi
+cd backend
+python -m scripts.import_omi
 
 # 4. Start the backend
 uvicorn app.main:app --reload
 
-# 5. Start the frontend
-cd frontend && npm run dev
+# 5. Start the frontend (from project root)
+cd ../frontend && npm run dev
 ```
 
 ## Data
