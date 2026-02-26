@@ -55,19 +55,19 @@ def init_schema(db_url: str):
     cleaned_sql = "\n".join(lines)
 
     engine = create_engine(db_url)
-    with engine.begin() as conn:
-        for statement in cleaned_sql.split(";"):
-            stmt = statement.strip()
-            if not stmt:
-                continue
-            try:
+    for statement in cleaned_sql.split(";"):
+        stmt = statement.strip()
+        if not stmt:
+            continue
+        try:
+            with engine.begin() as conn:
                 conn.execute(text(stmt))
-            except Exception as e:
-                err_msg = str(e).lower()
-                if "already exists" in err_msg or "duplicate" in err_msg:
-                    pass
-                else:
-                    raise
+        except Exception as e:
+            err_msg = str(e).lower()
+            if "already exists" in err_msg or "duplicate" in err_msg:
+                pass
+            else:
+                raise
     logger.info("Database schema initialized")
 
 
