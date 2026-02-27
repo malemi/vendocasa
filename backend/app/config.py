@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     data_dir: str = "./data"
     google_geocoding_api_key: str = ""
     cors_origins: str = "http://localhost:5173"
+    anthropic_api_key: str = ""
 
     @property
     def cors_origin_list(self) -> list[str]:
