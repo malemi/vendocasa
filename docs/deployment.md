@@ -58,7 +58,7 @@ Set these in the Railway dashboard:
 ```yaml
 services:
   db:
-    image: postgis/postgis:16-3.4
+    image: imresamu/postgis:16-3.5-alpine
     environment:
       POSTGRES_DB: vendocasa
       POSTGRES_USER: vendocasa
@@ -72,14 +72,29 @@ volumes:
   pgdata:
 ```
 
+Note: uses `imresamu/postgis` instead of `postgis/postgis` for Apple Silicon (arm64) compatibility.
+
 Start:
 ```bash
 docker compose up -d db
 ```
 
-Connection string for local dev:
+### Backend Configuration
+
+The backend reads configuration from `backend/.env`. Copy the example and edit:
+
+```bash
+cd backend
+cp .env.example .env
+# Edit .env with your settings
+```
+
+`.env` contents:
 ```
 DATABASE_URL=postgresql+psycopg://vendocasa:vendocasa@localhost:5432/vendocasa
+DATA_DIR=/path/to/your/omi/zip/files
+GOOGLE_GEOCODING_API_KEY=
+CORS_ORIGINS=http://localhost:5173
 ```
 
 ### Backend
@@ -100,24 +115,41 @@ npm run dev
 
 ## Initial Data Load
 
-The OMI zip files are in `./data/` (not committed to git due to size).
+OMI zip files are stored outside the repo (configured via `DATA_DIR` in `backend/.env`).
 
 ```bash
-# Import all semesters from all zips
-python -m backend.scripts.import_omi ./data/ $DATABASE_URL
+cd backend
+python -m scripts.import_omi
+```
+
+The script reads `DATA_DIR` and `DATABASE_URL` from `.env` automatically.
+
+To override via CLI args:
+```bash
+python -m scripts.import_omi /path/to/data postgresql+psycopg://user:pass@host/db
+```
+
+To reset the database and re-import everything:
+```bash
+python -m scripts.import_omi --reset
 ```
 
 On Railway, run as a one-off command:
 ```bash
-railway run python -m backend.scripts.import_omi ./data/ $DATABASE_URL
+railway run python -m scripts.import_omi
 ```
+
+Full import (23 semesters) produces:
+- ~620,000 zone polygons (with PostGIS geometries)
+- ~3,750,000 quotation rows (EUR/m2 price ranges)
 
 ## Semiannual Data Refresh
 
 1. Download new zip from Agenzia delle Entrate (SPID required)
-2. Place in `./data/`
-3. Run import script -- it skips existing semesters automatically
-4. Frontend picks up new semester via `/api/semesters`
+2. Place in the data directory configured in `DATA_DIR`
+3. Run: `cd backend && python -m scripts.import_omi`
+4. The script detects the new semester and imports only new data (existing semesters are skipped via UNIQUE constraints)
+5. Frontend picks up new semester via `/api/semesters`
 
 ## Estimated Costs
 
