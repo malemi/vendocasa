@@ -15,7 +15,7 @@ function InsightCard({ title, icon, children, defaultOpen = false }: InsightCard
       <div style={styles.cardHeader} onClick={() => setIsOpen(!isOpen)}>
         <span style={styles.cardIcon}>{icon}</span>
         <span style={styles.cardTitle}>{title}</span>
-        <span style={styles.chevron}>{isOpen ? "\u25B2" : "\u25BC"}</span>
+        <span style={styles.chevron}>{isOpen ? "▲" : "▼"}</span>
       </div>
       {isOpen && <div style={styles.cardBody}>{children}</div>}
     </div>
@@ -43,7 +43,7 @@ export function AgentIncentives({ estimatedValue }: AgentIncentivesProps) {
 
       <InsightCard
         title="Il problema Freakonomics"
-        icon="\uD83D\uDCCA"
+        icon="📊"
         defaultOpen={true}
       >
         <p style={styles.text}>
@@ -75,7 +75,7 @@ export function AgentIncentives({ estimatedValue }: AgentIncentivesProps) {
         </p>
       </InsightCard>
 
-      <InsightCard title="Perche l'agenzia valuta meno" icon="\uD83D\uDCB0">
+      <InsightCard title="Perche l'agenzia valuta meno" icon="💰">
         <p style={styles.text}>
           Le agenzie spesso usano i valori OMI per lo stato <strong>"NORMALE"</strong> come base,
           senza applicare i coefficienti correttivi per ristrutturazione, piano, silenziosita.
@@ -131,7 +131,7 @@ export function AgentIncentives({ estimatedValue }: AgentIncentivesProps) {
         </div>
       </InsightCard>
 
-      <InsightCard title="Come scegliere un agente" icon="\uD83D\uDD0D">
+      <InsightCard title="Come scegliere un agente" icon="🔍">
         <ol style={styles.numberedList}>
           <li>
             <strong>Chiedi: "Quali vendite comparabili in questo edificio/strada supportano la tua valutazione?"</strong>
