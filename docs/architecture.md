@@ -64,10 +64,11 @@ CREATE TABLE omi.quotations (
     rent_min            NUMERIC(10,2),
     rent_max            NUMERIC(10,2),
     surface_type_rent   CHAR(1),
-    CONSTRAINT fk_zone FOREIGN KEY (link_zona, semester)
-        REFERENCES omi.zones(link_zona, semester)
+    UNIQUE(link_zona, semester, property_type_code, conservation_state)
 );
 ```
+
+Note: there is **no foreign key** from `quotations` to `zones`. Not every `link_zona` in the quotation CSVs has a corresponding KML polygon (some zones lack geographic perimeters). The join is done at query time via the shared `link_zona` + `semester` columns.
 
 **omi.transactions** -- Manually entered comparable sales
 ```sql
@@ -97,6 +98,19 @@ CREATE TABLE omi.geocode_cache (
     source              VARCHAR(30),
     created_at          TIMESTAMPTZ DEFAULT NOW()
 );
+```
+
+### Indexes
+
+```sql
+-- Spatial index for ST_Intersects / ST_DWithin queries
+CREATE INDEX idx_zones_geom ON omi.zones USING GIST (geom);
+-- Fast lookup by join key
+CREATE INDEX idx_zones_link ON omi.zones (link_zona);
+CREATE INDEX idx_zones_semester ON omi.zones (semester);
+-- Quotation lookup
+CREATE INDEX idx_quot_lookup ON omi.quotations (link_zona, semester);
+CREATE INDEX idx_quot_type ON omi.quotations (property_type_code);
 ```
 
 ## Request Flow: Address Valuation
@@ -142,14 +156,20 @@ vendocasa/
 +-- backend/
 |   +-- app/
 |   |   +-- main.py                # FastAPI app
-|   |   +-- config.py              # Settings
+|   |   +-- config.py              # Settings (reads .env)
 |   |   +-- database.py            # SQLAlchemy engine
 |   |   +-- models/                # ORM models
 |   |   +-- schemas/               # Pydantic schemas
 |   |   +-- api/                   # Route handlers
 |   |   +-- services/              # Business logic
 |   +-- scripts/                   # Import scripts
-|   +-- alembic/                   # DB migrations
+|   |   +-- import_omi.py          # Unified entry point
+|   |   +-- import_omi_zones.py    # KML -> PostGIS importer
+|   |   +-- import_omi_quotations.py # CSV -> COPY importer
+|   +-- sql/
+|   |   +-- 001_schema.sql         # Database DDL
+|   +-- .env                       # Local config (DATABASE_URL, DATA_DIR)
+|   +-- .env.example               # Template
 |   +-- Dockerfile
 |   +-- pyproject.toml
 +-- frontend/

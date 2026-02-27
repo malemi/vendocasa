@@ -12,36 +12,67 @@ Personal, non-commercial tool for property valuation across Italian cities and r
 
 ## Tech Stack
 
-- **Backend:** Python 3.12+ / FastAPI / SQLAlchemy + GeoAlchemy2
+- **Backend:** Python 3.12+ / FastAPI / SQLAlchemy + psycopg3
 - **Frontend:** React (Vite) + TypeScript + React-Leaflet
 - **Database:** PostgreSQL + PostGIS
 - **Geocoding:** Nominatim (primary) + Google Geocoding API (fallback)
-- **Deployment:** Railway (~$5/month hobby plan)
 
 ## Quick Start
 
 ```bash
-# 1. Start the database (local dev)
+# 1. Start the database (local dev -- uses imresamu/postgis for Apple Silicon support)
 docker compose up -d db
 
 # 2. Configure environment
 cp backend/.env.example backend/.env
 # Edit backend/.env with your database credentials and data directory
 
-# 3. Import OMI data (reads DATA_DIR and DATABASE_URL from .env)
+# 3. Install Python dependencies
 cd backend
+pip install -e ".[dev]"
+
+# 4. Import OMI data (reads DATA_DIR and DATABASE_URL from .env)
 python -m scripts.import_omi
 
-# 4. Start the backend
+# To reset and re-import everything:
+python -m scripts.import_omi --reset
+
+# 5. Start the backend
 uvicorn app.main:app --reload
 
-# 5. Start the frontend (from project root)
-cd ../frontend && npm run dev
+# 6. Start the frontend (from project root)
+cd ../frontend && npm install && npm run dev
 ```
 
 ## Data
 
-OMI data files (zip) are stored in `./data/` and downloaded manually from the Agenzia delle Entrate portal (requires SPID authentication). See [docs/data-sources.md](docs/data-sources.md) for details on data formats, update procedures, and legal considerations.
+OMI data files (zip) are stored outside the repo (configured via `DATA_DIR` in `.env`) and downloaded manually from the Agenzia delle Entrate portal (requires SPID authentication). See [docs/data-sources.md](docs/data-sources.md) for details.
+
+**Current dataset:** 25 zip files covering 23 semesters from 2010_S2 to 2025_S1 (~2.4 GB). Full import produces:
+- ~620,000 zone polygons (with PostGIS geometries)
+- ~3,750,000 quotation rows (EUR/m2 price ranges)
+
+## Import Script
+
+```bash
+cd backend
+
+# Normal import (skips already-imported semesters)
+python -m scripts.import_omi
+
+# Reset database and re-import everything
+python -m scripts.import_omi --reset
+
+# Override data directory or database URL
+python -m scripts.import_omi /path/to/data postgresql+psycopg://user:pass@host/db
+```
+
+The script handles:
+- 3 different KML formats across semesters (2010-2013: direct LINKZONA, 2014_S1: filename+name extraction, 2014_S2+: CODCOM/CODZONA)
+- UTF-8 and Latin-1 encoded CSVs (auto-fallback)
+- Invalid geometries (ST_MakeValid + ST_CollectionExtract)
+- Duplicate detection and safe re-imports
+- PostgreSQL COPY protocol for fast bulk loading
 
 ## Documentation
 
@@ -56,7 +87,7 @@ See the `docs/` directory:
 | [docs/api.md](docs/api.md) | Backend API endpoints reference |
 | [docs/valuation-methodology.md](docs/valuation-methodology.md) | How valuations are calculated, limitations, caveats |
 | [docs/legal.md](docs/legal.md) | Data licensing, personal use scope, restrictions |
-| [docs/deployment.md](docs/deployment.md) | Railway setup, environment variables, Docker configuration |
+| [docs/deployment.md](docs/deployment.md) | Docker setup, environment variables, deployment configuration |
 
 ## License
 
