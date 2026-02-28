@@ -94,7 +94,7 @@ function EnhancedValuationCard({ result }: { result: Record<string, unknown> }) 
       </div>
       <div style={styles.eurM2}>
         {Math.round(adjusted.adjusted_price_min as number)} - {Math.round(adjusted.adjusted_price_max as number)} EUR/m2
-        (base {adjusted.base_conservation_state}: {Math.round(adjusted.base_price_min as number)} - {Math.round(adjusted.base_price_max as number)})
+        (base {String(adjusted.base_conservation_state)}: {Math.round(adjusted.base_price_min as number)} - {Math.round(adjusted.base_price_max as number)})
       </div>
     </div>
   );

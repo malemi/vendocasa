@@ -112,7 +112,7 @@ export function ChatPanel({ onMapUpdate }: ChatPanelProps) {
               )
             );
           } else if (event.type === "map_update") {
-            const coords = event.data as Coordinates;
+            const coords = event.data as unknown as Coordinates;
             onMapUpdate(coords);
           } else if (event.type === "error") {
             const errorMsg = (event.data as { message: string }).message;

@@ -1,7 +1,6 @@
-import { GeoJSON, Popup } from "react-leaflet";
+import { GeoJSON } from "react-leaflet";
 import type { Layer, PathOptions } from "leaflet";
 import type { ZoneGeoJSON } from "../../types";
-import { ZonePopup } from "./ZonePopup";
 
 interface ZoneLayerProps {
   data: ZoneGeoJSON;

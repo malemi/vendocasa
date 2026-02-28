@@ -1,9 +1,8 @@
 import { useState } from "react";
-import type { ValuationResponse, EnhancedValuationResponse, PropertyDetails } from "../../types";
+import type { ValuationResponse, PropertyDetails } from "../../types";
 
 interface CoefficientWizardProps {
   basicValuation: ValuationResponse;
-  onResult: (result: EnhancedValuationResponse) => void;
   isLoading: boolean;
   onSubmit: (details: PropertyDetails) => void;
 }
@@ -117,10 +116,9 @@ function formatEur(value: number): string {
   }).format(value);
 }
 
-export function CoefficientWizard({ basicValuation, onResult, isLoading, onSubmit }: CoefficientWizardProps) {
+export function CoefficientWizard({ basicValuation, isLoading, onSubmit }: CoefficientWizardProps) {
   const [step, setStep] = useState(1);
   const [details, setDetails] = useState<PropertyDetails>({ ...DEFAULT_DETAILS });
-  const [enhanced, setEnhanced] = useState<EnhancedValuationResponse | null>(null);
 
   const updateDetail = (factor: string, value: string) => {
     setDetails((prev) => ({ ...prev, [factor]: value }));
