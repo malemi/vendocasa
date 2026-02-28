@@ -6,7 +6,11 @@ from app.config import settings
 
 # Convert sync URL to async: postgresql+psycopg -> postgresql+psycopg (psycopg3 supports async natively)
 _db_url = settings.database_url
-if "+psycopg://" in _db_url and "+psycopg_async://" not in _db_url:
+# Handle various PostgreSQL URL formats (local, Supabase, etc.)
+if _db_url.startswith("postgres://"):
+    # Supabase-style short URL
+    _db_url = _db_url.replace("postgres://", "postgresql+psycopg_async://", 1)
+elif "+psycopg://" in _db_url and "+psycopg_async://" not in _db_url:
     _db_url = _db_url.replace("+psycopg://", "+psycopg_async://")
 elif "postgresql://" in _db_url and "+psycopg" not in _db_url:
     _db_url = _db_url.replace("postgresql://", "postgresql+psycopg_async://")
