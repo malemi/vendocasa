@@ -1,4 +1,6 @@
-from fastapi import FastAPI
+from uuid import uuid4
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
@@ -17,6 +19,26 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def user_tracking(request: Request, call_next):
+    """Set/read a vendocasa_uid cookie to identify users for abuse prevention."""
+    user_id = request.cookies.get("vendocasa_uid")
+    if not user_id:
+        user_id = str(uuid4())
+    request.state.user_id = user_id
+    response = await call_next(request)
+    response.set_cookie(
+        "vendocasa_uid",
+        user_id,
+        max_age=365 * 24 * 3600,
+        httponly=False,
+        secure=True,
+        samesite="none",
+    )
+    return response
+
 
 app.include_router(api_router)
 
