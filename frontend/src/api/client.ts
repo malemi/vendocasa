@@ -9,8 +9,10 @@ import type {
   ZoneGeoJSON,
 } from "../types";
 
+const API_BASE = import.meta.env.VITE_API_URL || "";
+
 const api = axios.create({
-  baseURL: "/api",
+  baseURL: `${API_BASE}/api`,
 });
 
 export async function valuate(params: {
@@ -92,7 +94,7 @@ export async function streamChat(
   onEvent: (event: StreamChatEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {
-  const response = await fetch("/api/chat", {
+  const response = await fetch(`${API_BASE}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ messages }),
