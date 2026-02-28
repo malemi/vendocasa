@@ -158,6 +158,26 @@ export interface AdjustedEstimate {
   benchmark_comparison: BenchmarkComparison | null;
 }
 
+// Chat types
+
+export interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  toolResults?: ChatToolResult[];
+  isStreaming?: boolean;
+}
+
+export interface ChatToolResult {
+  tool: string;
+  result: Record<string, unknown>;
+}
+
+export interface SSEEvent {
+  type: "text_delta" | "tool_result" | "map_update" | "done" | "error";
+  data: Record<string, unknown>;
+}
+
 export interface EnhancedValuationResponse {
   address: string;
   coordinates: Coordinates;
