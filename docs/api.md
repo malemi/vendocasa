@@ -11,6 +11,58 @@ Configured via `CORS_ORIGINS` environment variable (comma-separated origins).
 
 ## Endpoints
 
+### POST /api/chat
+
+AI conversational agent via Server-Sent Events (SSE). The backend orchestrates Claude Sonnet 4 with programmatic tool calling to perform valuations through natural conversation.
+
+**Request Body:**
+```json
+{
+  "messages": [
+    {"role": "user", "content": "Valuta Via Sottocorno 17, Milano, 62mq"}
+  ]
+}
+```
+
+Messages follow the standard `role`/`content` format. Send the full conversation history with each request (the backend is stateless).
+
+**Response:** `text/event-stream` (SSE)
+
+```
+event: text_delta
+data: {"text": "Ciao! Cerco subito "}
+
+event: text_delta
+data: {"text": "informazioni sulla zona..."}
+
+event: tool_result
+data: {"tool": "valuate_property", "result": {"zone": {...}, "estimate": {...}, "coordinates": {...}}}
+
+event: map_update
+data: {"lat": 45.464, "lng": 9.190}
+
+event: text_delta
+data: {"text": "L'immobile si trova in zona C20..."}
+
+event: done
+data: {}
+```
+
+**SSE Event Types:**
+
+| Event | Data | Purpose |
+|-------|------|---------|
+| `text_delta` | `{"text": "..."}` | Streamed text token |
+| `tool_result` | `{"tool": "...", "result": {...}}` | Structured valuation data (rendered as inline cards in the chat) |
+| `map_update` | `{"lat": ..., "lng": ...}` | Coordinates for map flyTo |
+| `done` | `{}` | Stream complete |
+| `error` | `{"message": "..."}` | Error occurred |
+
+**Errors:**
+- `503` -- AI agent not configured (missing `ANTHROPIC_API_KEY`)
+
+---
+
 ### GET /api/valuate
 
 Main valuation endpoint. Geocodes an address, finds its OMI zone, and returns price data.
@@ -63,6 +115,59 @@ Main valuation endpoint. Geocodes an address, finds its OMI zone, and returns pr
 **Errors:**
 - `404` -- address not found by geocoder
 - `404` -- no OMI zone found for location (not even within 200m fallback)
+
+### POST /api/valuate/enhanced
+
+Enhanced valuation with correction coefficients. Takes property-specific details and applies Italian appraisal methodology adjustments to the OMI base range.
+
+**Request Body:**
+```json
+{
+  "address": "Via Sottocorno 17, Milano",
+  "surface_m2": 62,
+  "property_type": 20,
+  "semester": null,
+  "details": {
+    "conservation_state": "OTTIMO",
+    "renovation": "premium_post_2015",
+    "floor": "third_fourth",
+    "exposure": "south_dual",
+    "noise": "very_silent",
+    "elevator": "present",
+    "common_areas": "needs_maintenance",
+    "facade": "good",
+    "energy_class": "c_d"
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "base_estimate": {
+    "min": 403000,
+    "max": 551800,
+    "mid": 477400,
+    "eur_per_m2_range": [6500, 8900]
+  },
+  "adjusted_estimate": {
+    "min": 487630,
+    "max": 667678,
+    "mid": 577654,
+    "eur_per_m2_range": [7865, 10769]
+  },
+  "total_coefficient": 0.21,
+  "coefficients_applied": [
+    {"factor": "renovation", "option": "premium_post_2015", "value": 0.10},
+    {"factor": "floor", "option": "third_fourth", "value": 0.05},
+    {"factor": "exposure", "option": "south_dual", "value": 0.05},
+    {"factor": "noise", "option": "very_silent", "value": 0.03},
+    {"factor": "common_areas", "option": "needs_maintenance", "value": -0.02}
+  ],
+  "zone": { "..." },
+  "coordinates": {"lat": 45.464, "lng": 9.190}
+}
+```
 
 ### GET /api/zones/geojson
 
@@ -163,6 +268,15 @@ Compare valuations for multiple addresses.
 | addresses | string | yes | Comma-separated addresses |
 | property_type | int | no | Property type code (default 20) |
 | surface_m2 | float | no | Surface area |
+
+### GET /api/health
+
+Health check endpoint (used by Railway for deployment monitoring).
+
+**Response:**
+```json
+{"status": "ok"}
+```
 
 ## Geocoding Strategy
 
