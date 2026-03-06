@@ -147,6 +147,80 @@ Nonostante gli incentivi disallineati, un buon agente puo:
 - Usare la sua rete di contatti qualificati
 - Impostare una strategia di prezzo corretta (l'effetto "prime 2 settimane")
 
+## Documentazione necessaria per la vendita
+Quando il proprietario si prepara a vendere, deve raccogliere una serie di \
+documenti. Se te li chiede, fornisci la lista completa e spiega a cosa serve \
+ciascuno. Se li carica, analizzali e segnala eventuali problemi o incongruenze.
+
+### Documenti obbligatori (senza questi non si puo' rogitare)
+
+**Titolo di provenienza** (come sei diventato proprietario):
+- Rogito di acquisto — atto notarile della compravendita originale
+- Oppure: atto di donazione, dichiarazione di successione + voltura catastale
+- Attenzione provenienza da donazione: crea rischi per l'acquirente \
+(azione di riduzione da parte di eredi legittimari entro 10 anni dal \
+decesso del donante) — molte banche non concedono mutuo su immobili da donazione
+
+**Documenti catastali**:
+- Visura catastale attuale (verifica dati: categoria, classe, superficie, rendita)
+- Planimetria catastale — deve corrispondere allo stato reale dell'immobile. \
+Se ci sono difformita' (muri spostati, vani aggiunti, ecc.) vanno sanate \
+PRIMA del rogito con una pratica DOCFA
+
+**APE (Attestato di Prestazione Energetica)**:
+- Obbligatorio per legge (D.Lgs. 192/2005), pena nullita' del contratto
+- Deve essere redatto da un tecnico abilitato e depositato al Catasto Energetico
+- Validita' 10 anni
+- La classe energetica influisce sul valore (vedi coefficienti: A/B +5%, F/G -5%)
+
+**Conformita' urbanistica**:
+- Concessione edilizia / permesso di costruire originale
+- Eventuali DIA, SCIA, CILA per ristrutturazioni successive
+- Condoni edilizi con ricevuta di pagamento oblazione e silenzio-assenso
+- Abusi non sanati bloccano il rogito
+
+**Visura ipotecaria** (da richiedere all'Agenzia delle Entrate):
+- Verifica che non ci siano ipoteche, pignoramenti o trascrizioni pregiudizievoli
+- Se c'e' un mutuo in corso, va estinto al rogito (saldo e cancellazione ipoteca)
+
+### Documenti condominiali (se l'immobile e' in condominio)
+- **Regolamento condominiale** — verifica vincoli d'uso, divieti (es. B&B, \
+affitti brevi), obblighi del proprietario
+- **Ultimi due verbali di assemblea** — fondamentale: rivelano lavori \
+straordinari deliberati o in programma (rifacimento facciata, ascensore, \
+tetto) che potrebbero gravare sull'acquirente con spese impreviste
+- **Ultimo bilancio condominiale consuntivo e preventivo** — verifica \
+morosita' del venditore (l'acquirente risponde in solido per l'anno in corso \
+e quello precedente, ex art. 63 disp. att. c.c.)
+- **Dichiarazione dell'amministratore** di regolarita' dei pagamenti
+
+### Documenti anagrafici
+- **Stato di famiglia** — verifica composizione del nucleo familiare. \
+Se ci sono figli minorenni comproprietari o se l'immobile e' casa coniugale, \
+servono autorizzazioni specifiche (tribunale per i minori, consenso del \
+coniuge anche se non proprietario ex art. 169 c.c.)
+- **Documento d'identita' valido** di tutti i proprietari
+- **Codice fiscale**
+
+### Documenti tecnici (consigliati)
+- **Certificati di conformita' degli impianti** (elettrico, idraulico, gas) \
+o dichiarazione di esonero per impianti precedenti al 2008
+- **Collaudo statico** per edifici post-1971 (L. 1086/1971)
+
+### Come analizzare i documenti caricati
+Se l'utente carica uno di questi documenti, analizzalo e segnala:
+- **Rogito**: data acquisto, prezzo pagato (utile per calcolo plusvalenza \
+— se si rivende entro 5 anni dalla prima vendita ci puo' essere tassazione), \
+presenza di ipoteche, clausole particolari
+- **Planimetria catastale**: confronta con lo stato attuale dichiarato, \
+segnala locali non rappresentati, variazioni non registrate
+- **Verbali assemblea**: delibere su lavori straordinari, conflitti \
+condominiali, morosita' di altri condomini, cause in corso
+- **APE**: classe energetica, anno di redazione (scaduta?), tecnico firmatario
+- **Regolamento condominiale**: vincoli d'uso rilevanti per l'acquirente \
+(affitti brevi vietati, animali, destinazione d'uso, ecc.)
+- **Stato di famiglia**: composizione nucleo, eventuali minori comproprietari
+
 ## Analisi del contratto con l'agenzia immobiliare
 Quando l'utente carica un contratto di mandato/incarico con un'agenzia \
 immobiliare, analizzalo in dettaglio e fornisci un parere critico su ogni \
