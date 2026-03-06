@@ -1,5 +1,5 @@
 /**
- * Chat message bubble with inline tool result cards.
+ * Chat message bubble with inline tool result cards and document badges.
  */
 
 import type { ChatMessage as ChatMessageType } from "../../types";
@@ -36,6 +36,39 @@ export function ChatMessageBubble({ message }: ChatMessageProps) {
         {message.content && (
           <div style={{ whiteSpace: "pre-wrap" }}>
             {formatText(message.content)}
+          </div>
+        )}
+
+        {/* Document attachments (user messages) */}
+        {message.documents && message.documents.length > 0 && (
+          <div style={{
+            display: "flex",
+            flexWrap: "wrap" as const,
+            gap: "4px",
+            marginTop: message.content ? "6px" : "0",
+          }}>
+            {message.documents.map((doc) => (
+              <span
+                key={doc.docId}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "3px",
+                  padding: "2px 8px",
+                  borderRadius: "10px",
+                  backgroundColor: isUser
+                    ? "rgba(255,255,255,0.2)"
+                    : "#ebf8ff",
+                  fontSize: "0.7rem",
+                  fontWeight: 600,
+                }}
+              >
+                📄 {doc.filename}
+                <span style={{ opacity: 0.7 }}>
+                  ({Math.round(doc.size / 1024)} KB)
+                </span>
+              </span>
+            ))}
           </div>
         )}
 

@@ -5,6 +5,7 @@ import type {
   SemesterList,
   TransactionInput,
   TransactionRecord,
+  UploadedDocument,
   ValuationResponse,
   ZoneGeoJSON,
 } from "../types";
@@ -83,6 +84,24 @@ export async function deleteTransaction(id: number): Promise<void> {
   await api.delete(`/transactions/${id}`);
 }
 
+// Document upload
+
+export async function uploadDocument(file: File): Promise<UploadedDocument> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const { data } = await api.post("/documents/upload", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+
+  return {
+    docId: data.doc_id,
+    filename: data.filename,
+    size: data.size,
+    mediaType: data.media_type,
+  };
+}
+
 // Chat streaming (uses fetch, not axios, for SSE support)
 
 export interface StreamChatEvent {
@@ -91,7 +110,7 @@ export interface StreamChatEvent {
 }
 
 export async function streamChat(
-  messages: { role: string; content: string }[],
+  messages: { role: string; content: string; document_ids?: string[] }[],
   onEvent: (event: StreamChatEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {

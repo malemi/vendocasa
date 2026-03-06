@@ -158,6 +158,15 @@ export interface AdjustedEstimate {
   benchmark_comparison: BenchmarkComparison | null;
 }
 
+// Document upload types
+
+export interface UploadedDocument {
+  docId: string;
+  filename: string;
+  size: number;
+  mediaType: string;
+}
+
 // Chat types
 
 export interface ChatMessage {
@@ -166,6 +175,7 @@ export interface ChatMessage {
   content: string;
   toolResults?: ChatToolResult[];
   isStreaming?: boolean;
+  documents?: UploadedDocument[];
 }
 
 export interface ChatToolResult {

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -12,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import get_db
 from app.services.agent import run_agent_stream
+from app.services.document_store import MAX_FILES_PER_MESSAGE, get_document
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +23,7 @@ router = APIRouter()
 class ChatMessage(BaseModel):
     role: str  # "user" or "assistant"
     content: str
+    document_ids: list[str] | None = None
 
 
 class ChatRequest(BaseModel):
@@ -37,6 +40,7 @@ async def chat(
 
     Accepts the full conversation history and returns an SSE stream.
     The agent has access to all valuation tools and executes them server-side.
+    User messages may include document_ids referencing previously uploaded PDFs.
 
     SSE event types:
       text_delta  - streamed text tokens
@@ -54,7 +58,44 @@ async def chat(
             detail="AI agent not configured. Set ANTHROPIC_API_KEY in .env",
         )
 
-    api_messages = [{"role": m.role, "content": m.content} for m in body.messages]
+    # Build Claude API messages, resolving document_ids to content blocks
+    api_messages: list[dict] = []
+    for m in body.messages:
+        if m.document_ids and m.role == "user":
+            if len(m.document_ids) > MAX_FILES_PER_MESSAGE:
+                raise HTTPException(
+                    400,
+                    f"Massimo {MAX_FILES_PER_MESSAGE} documenti per messaggio.",
+                )
+
+            # Multi-block content: documents first, then text
+            content_blocks: list[dict] = []
+            for doc_id in m.document_ids:
+                doc = get_document(doc_id)
+                if doc is None:
+                    raise HTTPException(
+                        400,
+                        f"Documento {doc_id} non trovato o scaduto. Ricaricalo.",
+                    )
+                content_blocks.append({
+                    "type": "document",
+                    "source": {
+                        "type": "base64",
+                        "media_type": doc.media_type,
+                        "data": base64.standard_b64encode(doc.data).decode("ascii"),
+                    },
+                })
+                logger.info(
+                    "Resolved document %s (%s, %d bytes) for user_id=%s",
+                    doc.doc_id, doc.filename, doc.size, user_id,
+                )
+
+            if m.content.strip():
+                content_blocks.append({"type": "text", "text": m.content})
+
+            api_messages.append({"role": m.role, "content": content_blocks})
+        else:
+            api_messages.append({"role": m.role, "content": m.content})
 
     return StreamingResponse(
         run_agent_stream(api_messages, db),
