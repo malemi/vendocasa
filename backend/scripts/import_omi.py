@@ -78,7 +78,6 @@ def reset_schema(db_url: str):
         conn.execute(text("DROP TABLE IF EXISTS omi.quotations CASCADE"))
         conn.execute(text("DROP TABLE IF EXISTS omi.zones CASCADE"))
         conn.execute(text("DROP TABLE IF EXISTS omi.transactions CASCADE"))
-        conn.execute(text("DROP TABLE IF EXISTS omi.geocode_cache CASCADE"))
         conn.execute(text("DROP SCHEMA IF EXISTS omi CASCADE"))
     logger.info("Dropped all OMI tables and schema")
     init_schema(db_url)

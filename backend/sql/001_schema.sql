@@ -58,12 +58,3 @@ CREATE TABLE omi.transactions (
     notes               TEXT,
     created_at          TIMESTAMPTZ DEFAULT NOW()
 );
-
--- Geocoding cache
-CREATE TABLE omi.geocode_cache (
-    address             TEXT PRIMARY KEY,
-    lat                 DOUBLE PRECISION,
-    lng                 DOUBLE PRECISION,
-    source              VARCHAR(30),            -- "nominatim" or "google"
-    created_at          TIMESTAMPTZ DEFAULT NOW()
-);

@@ -1,16 +1,19 @@
-"""Geocoding service with Nominatim primary and Google fallback.
+"""Geocoding service with smart retry for Italian addresses.
 
-Includes a database cache for permanent storage of results.
+Tries Nominatim first, then Google as fallback.
+If the original address fails, retries with variations:
+  1. Original: "Via Sottocorno 17, Milano"
+  2. Without civic number: "Via Sottocorno, Milano"
+  3. Street keyword + city: "Sottocorno, Milano"
 """
 
 import asyncio
 import logging
+import re
 from dataclasses import dataclass
 
 from geopy.geocoders import GoogleV3, Nominatim
 from geopy.extra.rate_limiter import RateLimiter
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 
@@ -24,6 +27,41 @@ class GeoResult:
     source: str
 
 
+# Regex to strip civic numbers: "Via Roma 17" -> "Via Roma", "Via Roma, 17/A" -> "Via Roma"
+_CIVIC_RE = re.compile(r",?\s*\d+[/\w]*\s*(?=,|$)")
+# Regex to strip Italian street prefixes: Via, Viale, Corso, Piazza, etc.
+_PREFIX_RE = re.compile(
+    r"^(via|viale|v\.le|corso|c\.so|piazza|p\.za|piazzale|p\.le|vicolo|"
+    r"largo|lungarno|lungotevere|strada|stradone|borgata|borgo|contrada|"
+    r"salita|discesa|traversa|rampa|galleria|passaggio)\s+",
+    re.IGNORECASE,
+)
+
+
+def _address_variations(address: str) -> list[str]:
+    """Generate progressively relaxed address variations.
+
+    Given "Via Sottocorno 17, Milano" produces:
+      1. "Via Sottocorno 17, Milano"       (original)
+      2. "Via Sottocorno, Milano"           (no civic)
+      3. "Sottocorno, Milano"              (no prefix, no civic)
+    """
+    variations = [address]
+
+    # Strip civic number
+    no_civic = _CIVIC_RE.sub("", address).strip().rstrip(",").strip()
+    if no_civic != address:
+        variations.append(no_civic)
+
+    # Strip street prefix (from the no-civic version)
+    base = no_civic if no_civic != address else address
+    no_prefix = _PREFIX_RE.sub("", base).strip()
+    if no_prefix != base:
+        variations.append(no_prefix)
+
+    return variations
+
+
 class ItalianGeocoder:
     def __init__(self):
         self.nominatim = Nominatim(user_agent="vendocasa_personal/1.0", timeout=10)
@@ -34,48 +72,26 @@ class ItalianGeocoder:
             else None
         )
 
-    async def geocode(self, address: str, db: AsyncSession) -> GeoResult | None:
-        """Geocode an address, checking cache first."""
-        # 1. Check DB cache
-        cached = await self._get_cached(address, db)
-        if cached:
-            return cached
+    async def geocode(self, address: str) -> GeoResult | None:
+        """Geocode an address, trying variations if the original fails."""
+        variations = _address_variations(address)
 
-        # 2. Try Nominatim (run sync geocoder in thread)
-        result = await self._try_nominatim(address)
-        if result:
-            await self._save_cache(address, result, db)
-            return result
-
-        # 3. Fallback to Google
-        if self.google:
-            result = await self._try_google(address)
+        for variant in variations:
+            result = await self._try_nominatim(variant)
             if result:
-                await self._save_cache(address, result, db)
+                if variant != address:
+                    logger.info("Original '%s' failed, resolved via variant '%s'", address, variant)
                 return result
 
-        return None
+            if self.google:
+                result = await self._try_google(variant)
+                if result:
+                    if variant != address:
+                        logger.info("Original '%s' failed, resolved via variant '%s'", address, variant)
+                    return result
 
-    async def _get_cached(self, address: str, db: AsyncSession) -> GeoResult | None:
-        result = await db.execute(
-            text("SELECT lat, lng, source FROM omi.geocode_cache WHERE address = :addr"),
-            {"addr": address},
-        )
-        row = result.first()
-        if row:
-            return GeoResult(lat=row.lat, lng=row.lng, source=row.source)
+        logger.warning("All geocoding attempts failed for '%s' (tried %d variations)", address, len(variations))
         return None
-
-    async def _save_cache(self, address: str, result: GeoResult, db: AsyncSession):
-        await db.execute(
-            text("""
-                INSERT INTO omi.geocode_cache (address, lat, lng, source)
-                VALUES (:addr, :lat, :lng, :source)
-                ON CONFLICT (address) DO NOTHING
-            """),
-            {"addr": address, "lat": result.lat, "lng": result.lng, "source": result.source},
-        )
-        await db.commit()
 
     async def _try_nominatim(self, address: str) -> GeoResult | None:
         try:
@@ -83,10 +99,10 @@ class ItalianGeocoder:
                 self._geocode_nom, address, country_codes="it"
             )
             if loc:
-                logger.info(f"Nominatim geocoded '{address}' -> ({loc.latitude}, {loc.longitude})")
+                logger.info("Nominatim geocoded '%s' -> (%s, %s)", address, loc.latitude, loc.longitude)
                 return GeoResult(lat=loc.latitude, lng=loc.longitude, source="nominatim")
         except Exception as e:
-            logger.warning(f"Nominatim failed for '{address}': {e}")
+            logger.warning("Nominatim failed for '%s': %s", address, e)
         return None
 
     async def _try_google(self, address: str) -> GeoResult | None:
@@ -95,10 +111,10 @@ class ItalianGeocoder:
                 self.google.geocode, address, region="it"
             )
             if loc:
-                logger.info(f"Google geocoded '{address}' -> ({loc.latitude}, {loc.longitude})")
+                logger.info("Google geocoded '%s' -> (%s, %s)", address, loc.latitude, loc.longitude)
                 return GeoResult(lat=loc.latitude, lng=loc.longitude, source="google")
         except Exception as e:
-            logger.warning(f"Google failed for '{address}': {e}")
+            logger.warning("Google failed for '%s': %s", address, e)
         return None
 
 

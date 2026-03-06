@@ -25,7 +25,7 @@ async def geocode_and_find_zone(
     Returns (coords, zone, semester).
     Raises ValueError if address or zone not found.
     """
-    coords = await geocoder.geocode(address, db)
+    coords = await geocoder.geocode(address)
     if not coords:
         raise ValueError(f"Address not found: {address}")
 
