@@ -2,17 +2,26 @@ import { Link } from "react-router-dom";
 
 export function PrivacyPolicy() {
   return (
-    <div style={styles.container}>
-      <div style={styles.content}>
-        <Link to="/" style={styles.backLink}>
+    <div className="min-h-screen bg-bg-primary px-5 py-10">
+      <div className="max-w-[720px] mx-auto bg-bg-elevated rounded-xl p-8 md:p-10 shadow-lg border border-border">
+        <Link
+          to="/"
+          className="text-accent no-underline text-sm inline-block mb-6 hover:text-accent-hover transition-colors"
+        >
           &larr; Torna a VendoCasa
         </Link>
 
-        <h1 style={styles.h1}>Informativa Privacy</h1>
-        <p style={styles.lastUpdate}>Ultimo aggiornamento: febbraio 2026</p>
+        <h1 className="text-[28px] font-bold text-text-primary m-0 mb-2">
+          Informativa Privacy
+        </h1>
+        <p className="text-[13px] text-text-tertiary m-0 mb-8">
+          Ultimo aggiornamento: febbraio 2026
+        </p>
 
-        <section style={styles.section}>
-          <h2 style={styles.h2}>1. Titolare del Trattamento</h2>
+        <section className="mb-7 leading-[1.7] text-[15px] text-text-secondary">
+          <h2 className="text-lg font-semibold text-text-primary m-0 mb-3">
+            1. Titolare del Trattamento
+          </h2>
           <p>
             VendoCasa è un progetto personale per la valutazione immobiliare
             basata sui dati OMI (Osservatorio del Mercato Immobiliare)
@@ -21,31 +30,35 @@ export function PrivacyPolicy() {
           </p>
         </section>
 
-        <section style={styles.section}>
-          <h2 style={styles.h2}>2. Dati Raccolti</h2>
+        <section className="mb-7 leading-[1.7] text-[15px] text-text-secondary">
+          <h2 className="text-lg font-semibold text-text-primary m-0 mb-3">
+            2. Dati Raccolti
+          </h2>
           <p>Il servizio raccoglie i seguenti dati:</p>
-          <ul style={styles.list}>
+          <ul className="pl-6 my-2 space-y-1">
             <li>
-              <strong>Cookie identificativo (vendocasa_uid):</strong> un
+              <strong className="text-text-primary">Cookie identificativo (vendocasa_uid):</strong> un
               identificatore univoco (UUID) assegnato al browser per
               riconoscere gli utenti e prevenire abusi del servizio. Durata: 1
               anno.
             </li>
             <li>
-              <strong>Messaggi di chat:</strong> le domande inviate all'agente
+              <strong className="text-text-primary">Messaggi di chat:</strong> le domande inviate all'agente
               AI vengono elaborate in tempo reale per fornire risposte. Non
               vengono salvate in modo permanente.
             </li>
             <li>
-              <strong>Indirizzo IP:</strong> registrato nei log del server per
+              <strong className="text-text-primary">Indirizzo IP:</strong> registrato nei log del server per
               motivi di sicurezza e diagnostica.
             </li>
           </ul>
         </section>
 
-        <section style={styles.section}>
-          <h2 style={styles.h2}>3. Finalità del Trattamento</h2>
-          <ul style={styles.list}>
+        <section className="mb-7 leading-[1.7] text-[15px] text-text-secondary">
+          <h2 className="text-lg font-semibold text-text-primary m-0 mb-3">
+            3. Finalità del Trattamento
+          </h2>
+          <ul className="pl-6 my-2 space-y-1">
             <li>Erogazione del servizio di valutazione immobiliare</li>
             <li>
               Prevenzione di abusi (identificazione e blocco di utilizzi
@@ -55,50 +68,66 @@ export function PrivacyPolicy() {
           </ul>
         </section>
 
-        <section style={styles.section}>
-          <h2 style={styles.h2}>4. Base Giuridica</h2>
+        <section className="mb-7 leading-[1.7] text-[15px] text-text-secondary">
+          <h2 className="text-lg font-semibold text-text-primary m-0 mb-3">
+            4. Base Giuridica
+          </h2>
           <p>
-            Il trattamento dei dati si basa sul <strong>consenso</strong>{" "}
+            Il trattamento dei dati si basa sul <strong className="text-text-primary">consenso</strong>{" "}
             dell'utente (art. 6, par. 1, lett. a, GDPR) per quanto riguarda
             l'impostazione del cookie identificativo, e sul{" "}
-            <strong>legittimo interesse</strong> del titolare (art. 6, par. 1,
+            <strong className="text-text-primary">legittimo interesse</strong> del titolare (art. 6, par. 1,
             lett. f, GDPR) per la prevenzione di abusi e la sicurezza del
             servizio.
           </p>
         </section>
 
-        <section style={styles.section}>
-          <h2 style={styles.h2}>5. Cookie Utilizzati</h2>
-          <table style={styles.table}>
-            <thead>
-              <tr>
-                <th style={styles.th}>Nome</th>
-                <th style={styles.th}>Tipo</th>
-                <th style={styles.th}>Durata</th>
-                <th style={styles.th}>Finalità</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td style={styles.td}>vendocasa_uid</td>
-                <td style={styles.td}>Tecnico / Identificativo</td>
-                <td style={styles.td}>1 anno</td>
-                <td style={styles.td}>
-                  Identificazione utente per prevenzione abusi
-                </td>
-              </tr>
-              <tr>
-                <td style={styles.td}>cookieConsent</td>
-                <td style={styles.td}>Tecnico (localStorage)</td>
-                <td style={styles.td}>Persistente</td>
-                <td style={styles.td}>Memorizzazione del consenso cookie</td>
-              </tr>
-            </tbody>
-          </table>
+        <section className="mb-7 leading-[1.7] text-[15px] text-text-secondary">
+          <h2 className="text-lg font-semibold text-text-primary m-0 mb-3">
+            5. Cookie Utilizzati
+          </h2>
+          <div className="overflow-x-auto my-3">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr>
+                  <th className="text-left p-2 px-3 bg-bg-surface border-b-2 border-border font-semibold text-[13px] text-text-secondary">
+                    Nome
+                  </th>
+                  <th className="text-left p-2 px-3 bg-bg-surface border-b-2 border-border font-semibold text-[13px] text-text-secondary">
+                    Tipo
+                  </th>
+                  <th className="text-left p-2 px-3 bg-bg-surface border-b-2 border-border font-semibold text-[13px] text-text-secondary">
+                    Durata
+                  </th>
+                  <th className="text-left p-2 px-3 bg-bg-surface border-b-2 border-border font-semibold text-[13px] text-text-secondary">
+                    Finalità
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="p-2 px-3 border-b border-border font-mono text-xs">vendocasa_uid</td>
+                  <td className="p-2 px-3 border-b border-border">Tecnico / Identificativo</td>
+                  <td className="p-2 px-3 border-b border-border">1 anno</td>
+                  <td className="p-2 px-3 border-b border-border">
+                    Identificazione utente per prevenzione abusi
+                  </td>
+                </tr>
+                <tr>
+                  <td className="p-2 px-3 border-b border-border font-mono text-xs">cookieConsent</td>
+                  <td className="p-2 px-3 border-b border-border">Tecnico (localStorage)</td>
+                  <td className="p-2 px-3 border-b border-border">Persistente</td>
+                  <td className="p-2 px-3 border-b border-border">Memorizzazione del consenso cookie</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </section>
 
-        <section style={styles.section}>
-          <h2 style={styles.h2}>6. Conservazione dei Dati</h2>
+        <section className="mb-7 leading-[1.7] text-[15px] text-text-secondary">
+          <h2 className="text-lg font-semibold text-text-primary m-0 mb-3">
+            6. Conservazione dei Dati
+          </h2>
           <p>
             I log del server contenenti l'indirizzo IP e l'identificativo
             utente vengono conservati per un massimo di 90 giorni. I messaggi
@@ -106,46 +135,50 @@ export function PrivacyPolicy() {
           </p>
         </section>
 
-        <section style={styles.section}>
-          <h2 style={styles.h2}>7. Servizi di Terze Parti</h2>
+        <section className="mb-7 leading-[1.7] text-[15px] text-text-secondary">
+          <h2 className="text-lg font-semibold text-text-primary m-0 mb-3">
+            7. Servizi di Terze Parti
+          </h2>
           <p>
             Il servizio si avvale dei seguenti fornitori terzi per il suo
             funzionamento:
           </p>
-          <ul style={styles.list}>
+          <ul className="pl-6 my-2 space-y-1">
             <li>
-              <strong>Anthropic (Claude AI):</strong> elaborazione delle
+              <strong className="text-text-primary">Anthropic (Claude AI):</strong> elaborazione delle
               risposte dell'agente AI. I messaggi vengono inviati ai server di
               Anthropic per la generazione delle risposte.
             </li>
             <li>
-              <strong>Supabase:</strong> hosting del database PostgreSQL
+              <strong className="text-text-primary">Supabase:</strong> hosting del database PostgreSQL
               contenente i dati OMI.
             </li>
             <li>
-              <strong>Railway:</strong> hosting del backend applicativo.
+              <strong className="text-text-primary">Railway:</strong> hosting del backend applicativo.
             </li>
             <li>
-              <strong>Vercel:</strong> hosting del frontend.
+              <strong className="text-text-primary">Vercel:</strong> hosting del frontend.
             </li>
             <li>
-              <strong>Nominatim (OpenStreetMap):</strong> geocodifica degli
+              <strong className="text-text-primary">Nominatim (OpenStreetMap):</strong> geocodifica degli
               indirizzi.
             </li>
             <li>
-              <strong>Google Geocoding API:</strong> geocodifica degli indirizzi
+              <strong className="text-text-primary">Google Geocoding API:</strong> geocodifica degli indirizzi
               come fallback.
             </li>
           </ul>
         </section>
 
-        <section style={styles.section}>
-          <h2 style={styles.h2}>8. Diritti dell'Utente</h2>
+        <section className="mb-7 leading-[1.7] text-[15px] text-text-secondary">
+          <h2 className="text-lg font-semibold text-text-primary m-0 mb-3">
+            8. Diritti dell'Utente
+          </h2>
           <p>
             Ai sensi del GDPR (Regolamento UE 2016/679), l'utente ha diritto
             di:
           </p>
-          <ul style={styles.list}>
+          <ul className="pl-6 my-2 space-y-1">
             <li>Accedere ai propri dati personali</li>
             <li>Richiederne la rettifica o la cancellazione</li>
             <li>Opporsi al trattamento</li>
@@ -159,8 +192,10 @@ export function PrivacyPolicy() {
           </p>
         </section>
 
-        <section style={styles.section}>
-          <h2 style={styles.h2}>9. Contatti</h2>
+        <section className="mb-7 leading-[1.7] text-[15px] text-text-secondary">
+          <h2 className="text-lg font-semibold text-text-primary m-0 mb-3">
+            9. Contatti
+          </h2>
           <p>
             Per qualsiasi domanda relativa alla privacy, è possibile aprire una
             issue sul{" "}
@@ -168,7 +203,7 @@ export function PrivacyPolicy() {
               href="https://github.com"
               target="_blank"
               rel="noopener noreferrer"
-              style={styles.link}
+              className="text-accent underline hover:text-accent-hover transition-colors"
             >
               repository del progetto
             </a>
@@ -176,12 +211,12 @@ export function PrivacyPolicy() {
           </p>
         </section>
 
-        <div style={styles.footer}>
-          <Link to="/" style={styles.link}>
+        <div className="mt-10 pt-5 border-t border-border text-center text-sm text-text-tertiary">
+          <Link to="/" className="text-accent underline hover:text-accent-hover transition-colors">
             Torna a VendoCasa
           </Link>
           {" | "}
-          <Link to="/terms" style={styles.link}>
+          <Link to="/terms" className="text-accent underline hover:text-accent-hover transition-colors">
             Termini di Utilizzo
           </Link>
         </div>
@@ -189,85 +224,3 @@ export function PrivacyPolicy() {
     </div>
   );
 }
-
-const styles = {
-  container: {
-    minHeight: "100vh",
-    backgroundColor: "#f7fafc",
-    padding: "40px 20px",
-    fontFamily:
-      '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-  } as React.CSSProperties,
-  content: {
-    maxWidth: "720px",
-    margin: "0 auto",
-    backgroundColor: "#fff",
-    borderRadius: "12px",
-    padding: "40px",
-    boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-  } as React.CSSProperties,
-  backLink: {
-    color: "#3182ce",
-    textDecoration: "none",
-    fontSize: "14px",
-    display: "inline-block",
-    marginBottom: "24px",
-  } as React.CSSProperties,
-  h1: {
-    fontSize: "28px",
-    fontWeight: 700,
-    color: "#1a202c",
-    margin: "0 0 8px 0",
-  } as React.CSSProperties,
-  lastUpdate: {
-    fontSize: "13px",
-    color: "#a0aec0",
-    margin: "0 0 32px 0",
-  } as React.CSSProperties,
-  section: {
-    marginBottom: "28px",
-    lineHeight: 1.7,
-    fontSize: "15px",
-    color: "#2d3748",
-  } as React.CSSProperties,
-  h2: {
-    fontSize: "18px",
-    fontWeight: 600,
-    color: "#2d3748",
-    margin: "0 0 12px 0",
-  } as React.CSSProperties,
-  list: {
-    paddingLeft: "24px",
-    margin: "8px 0",
-  } as React.CSSProperties,
-  table: {
-    width: "100%",
-    borderCollapse: "collapse",
-    margin: "12px 0",
-    fontSize: "14px",
-  } as React.CSSProperties,
-  th: {
-    textAlign: "left",
-    padding: "8px 12px",
-    backgroundColor: "#edf2f7",
-    borderBottom: "2px solid #e2e8f0",
-    fontWeight: 600,
-    fontSize: "13px",
-  } as React.CSSProperties,
-  td: {
-    padding: "8px 12px",
-    borderBottom: "1px solid #e2e8f0",
-  } as React.CSSProperties,
-  link: {
-    color: "#3182ce",
-    textDecoration: "underline",
-  } as React.CSSProperties,
-  footer: {
-    marginTop: "40px",
-    paddingTop: "20px",
-    borderTop: "1px solid #e2e8f0",
-    textAlign: "center",
-    fontSize: "14px",
-    color: "#718096",
-  } as React.CSSProperties,
-};

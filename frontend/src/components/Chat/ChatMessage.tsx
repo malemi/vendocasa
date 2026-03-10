@@ -13,58 +13,39 @@ export function ChatMessageBubble({ message }: ChatMessageProps) {
   const isUser = message.role === "user";
 
   return (
-    <div style={{
-      display: "flex",
-      justifyContent: isUser ? "flex-end" : "flex-start",
-      marginBottom: "12px",
-      paddingLeft: isUser ? "32px" : "0",
-      paddingRight: isUser ? "0" : "32px",
-    }}>
-      <div style={{
-        maxWidth: "100%",
-        padding: "10px 14px",
-        borderRadius: isUser ? "14px 14px 4px 14px" : "14px 14px 14px 4px",
-        backgroundColor: isUser ? "#2b6cb0" : "#fff",
-        color: isUser ? "#fff" : "#2d3748",
-        border: isUser ? "none" : "1px solid #e2e8f0",
-        fontSize: "0.85rem",
-        lineHeight: 1.6,
-        boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
-        wordBreak: "break-word" as const,
-      }}>
+    <div
+      className={`flex mb-3 ${isUser ? "justify-end pl-8" : "justify-start pr-8"}`}
+    >
+      <div
+        className={`
+          max-w-full px-3.5 py-2.5 text-sm leading-relaxed
+          shadow-sm break-words
+          ${
+            isUser
+              ? "bg-accent text-bg-primary rounded-[14px_14px_4px_14px]"
+              : "bg-bg-surface text-text-primary border border-border rounded-[14px_14px_14px_4px]"
+          }
+        `}
+      >
         {/* Text content with simple formatting */}
         {message.content && (
-          <div style={{ whiteSpace: "pre-wrap" }}>
-            {formatText(message.content)}
-          </div>
+          <div className="whitespace-pre-wrap">{formatText(message.content)}</div>
         )}
 
         {/* Document attachments (user messages) */}
         {message.documents && message.documents.length > 0 && (
-          <div style={{
-            display: "flex",
-            flexWrap: "wrap" as const,
-            gap: "4px",
-            marginTop: message.content ? "6px" : "0",
-          }}>
+          <div className={`flex flex-wrap gap-1 ${message.content ? "mt-1.5" : ""}`}>
             {message.documents.map((doc) => (
               <span
                 key={doc.docId}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "3px",
-                  padding: "2px 8px",
-                  borderRadius: "10px",
-                  backgroundColor: isUser
-                    ? "rgba(255,255,255,0.2)"
-                    : "#ebf8ff",
-                  fontSize: "0.7rem",
-                  fontWeight: 600,
-                }}
+                className={`
+                  inline-flex items-center gap-1 px-2 py-0.5
+                  rounded-[10px] text-[0.7rem] font-semibold
+                  ${isUser ? "bg-white/20" : "bg-accent-muted text-accent"}
+                `}
               >
                 📄 {doc.filename}
-                <span style={{ opacity: 0.7 }}>
+                <span className="opacity-70">
                   ({Math.round(doc.size / 1024)} KB)
                 </span>
               </span>
@@ -78,9 +59,7 @@ export function ChatMessageBubble({ message }: ChatMessageProps) {
         ))}
 
         {/* Streaming indicator */}
-        {message.isStreaming && !message.content && (
-          <StreamingDots />
-        )}
+        {message.isStreaming && !message.content && <StreamingDots />}
       </div>
     </div>
   );
@@ -90,7 +69,6 @@ export function ChatMessageBubble({ message }: ChatMessageProps) {
  * Simple text formatting: bold (**text**) and italic (*text*)
  */
 function formatText(text: string): React.ReactNode {
-  // Split by bold markers first
   const parts = text.split(/(\*\*[^*]+\*\*)/g);
   return parts.map((part, i) => {
     if (part.startsWith("**") && part.endsWith("**")) {
@@ -102,29 +80,16 @@ function formatText(text: string): React.ReactNode {
 
 function StreamingDots() {
   return (
-    <span style={{
-      display: "inline-flex",
-      gap: "3px",
-      padding: "4px 0",
-    }}>
+    <span className="inline-flex gap-1 py-1">
       {[0, 1, 2].map((i) => (
         <span
           key={i}
+          className="w-1.5 h-1.5 rounded-full bg-text-tertiary"
           style={{
-            width: "6px",
-            height: "6px",
-            borderRadius: "50%",
-            backgroundColor: "#a0aec0",
-            animation: `pulse 1.2s ease-in-out ${i * 0.2}s infinite`,
+            animation: `pulse-dot 1.2s ease-in-out ${i * 0.2}s infinite`,
           }}
         />
       ))}
-      <style>{`
-        @keyframes pulse {
-          0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
-          40% { opacity: 1; transform: scale(1); }
-        }
-      `}</style>
     </span>
   );
 }

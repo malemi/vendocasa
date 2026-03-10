@@ -150,18 +150,24 @@ export function CoefficientWizard({ basicValuation, isLoading, onSubmit }: Coeff
   }
 
   return (
-    <div style={styles.container}>
-      <div style={styles.headerRow}>
-        <h3 style={styles.title}>Valutazione avanzata</h3>
-        <div style={styles.stepIndicator}>
+    <div className="bg-bg-elevated rounded-lg p-4 shadow-sm border border-border">
+      {/* Header row with title + step indicator */}
+      <div className="flex justify-between items-center mb-3">
+        <h3 className="m-0 text-base text-accent font-semibold">
+          Valutazione avanzata
+        </h3>
+        <div className="flex gap-1.5">
           {[1, 2, 3].map((s) => (
             <span
               key={s}
-              style={{
-                ...styles.stepDot,
-                backgroundColor: s <= step ? "#2b6cb0" : "#e2e8f0",
-                color: s <= step ? "#fff" : "#a0aec0",
-              }}
+              className={`
+                w-6 h-6 rounded-full flex items-center justify-center
+                text-[0.7rem] font-bold cursor-pointer transition-colors
+                ${s <= step
+                  ? "bg-accent text-bg-primary"
+                  : "bg-bg-surface text-text-tertiary"
+                }
+              `}
               onClick={() => s < step && setStep(s)}
             >
               {s}
@@ -172,93 +178,24 @@ export function CoefficientWizard({ basicValuation, isLoading, onSubmit }: Coeff
 
       {/* Step 1: Conservation State */}
       {step === 1 && (
-        <div style={styles.stepContent}>
-          <p style={styles.stepLabel}>
-            Qual e lo stato conservativo del tuo immobile?
-          </p>
-          <p style={styles.hint}>
-            La differenza tra NORMALE e OTTIMO puo essere del 30-50%. Scegli lo stato che meglio descrive il tuo immobile.
-          </p>
-          {CONSERVATION_STATES.map((cs) => {
-            const range = quotationsByState[cs.key];
-            const isSelected = details.conservation_state === cs.key;
-            return (
-              <div
-                key={cs.key}
-                style={{
-                  ...styles.stateCard,
-                  borderColor: isSelected ? "#2b6cb0" : "#e2e8f0",
-                  backgroundColor: isSelected ? "#ebf8ff" : "#fff",
-                }}
-                onClick={() => updateDetail("conservation_state", cs.key)}
-              >
-                <div style={styles.stateHeader}>
-                  <strong>{cs.label}</strong>
-                  {range && (
-                    <span style={styles.stateRange}>
-                      {range.min.toLocaleString("it-IT")} - {range.max.toLocaleString("it-IT")} EUR/m2
-                      {range.prevalent && <span style={styles.prevalentBadge}>prevalente</span>}
-                    </span>
-                  )}
-                </div>
-                <p style={styles.stateDesc}>{cs.desc}</p>
-              </div>
-            );
-          })}
-          <button style={styles.nextBtn} onClick={() => setStep(2)}>
-            Avanti &rarr;
-          </button>
-        </div>
+        <ConservationStep
+          details={details}
+          quotationsByState={quotationsByState}
+          onUpdate={updateDetail}
+          onNext={() => setStep(2)}
+        />
       )}
 
       {/* Step 2: Property Details */}
       {step === 2 && (
-        <div style={styles.stepContent}>
-          <p style={styles.stepLabel}>Dettagli dell'immobile</p>
-          <p style={styles.hint}>
-            Seleziona le caratteristiche specifiche. L'impatto sul valore e mostrato accanto a ogni opzione.
-          </p>
-
-          {Object.entries(FACTOR_OPTIONS).map(([factor, config]) => (
-            <div key={factor} style={styles.factorGroup}>
-              <label style={styles.factorLabel}>{config.label}</label>
-              <select
-                style={styles.select}
-                value={details[factor as keyof PropertyDetails]}
-                onChange={(e) => updateDetail(factor, e.target.value)}
-              >
-                {config.options.map((opt) => (
-                  <option key={opt.key} value={opt.key}>
-                    {opt.label} ({formatPct(opt.pct)})
-                  </option>
-                ))}
-              </select>
-            </div>
-          ))}
-
-          <div style={styles.previewBox}>
-            <span style={styles.previewLabel}>Coefficiente totale:</span>
-            <span style={{
-              ...styles.previewValue,
-              color: totalPct >= 0 ? "#22543d" : "#9b2c2c",
-            }}>
-              {formatPct(totalPct)}
-            </span>
-          </div>
-
-          <div style={styles.buttonRow}>
-            <button style={styles.backBtn} onClick={() => setStep(1)}>
-              &larr; Indietro
-            </button>
-            <button
-              style={styles.calculateBtn}
-              onClick={handleCalculate}
-              disabled={isLoading}
-            >
-              {isLoading ? "Calcolo..." : "Calcola valutazione"}
-            </button>
-          </div>
-        </div>
+        <DetailsStep
+          details={details}
+          totalPct={totalPct}
+          isLoading={isLoading}
+          onUpdate={updateDetail}
+          onBack={() => setStep(1)}
+          onCalculate={handleCalculate}
+        />
       )}
 
       {/* Step 3: Results */}
@@ -275,6 +212,147 @@ export function CoefficientWizard({ basicValuation, isLoading, onSubmit }: Coeff
   );
 }
 
+/* ── Step 1: Conservation State ─────────────────────────── */
+
+function ConservationStep({
+  details,
+  quotationsByState,
+  onUpdate,
+  onNext,
+}: {
+  details: PropertyDetails;
+  quotationsByState: Record<string, { min: number; max: number; prevalent: boolean }>;
+  onUpdate: (factor: string, value: string) => void;
+  onNext: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2.5">
+      <p className="m-0 text-[0.9rem] font-semibold text-text-primary">
+        Qual e lo stato conservativo del tuo immobile?
+      </p>
+      <p className="m-0 text-[0.8rem] text-text-tertiary leading-snug">
+        La differenza tra NORMALE e OTTIMO puo essere del 30-50%. Scegli lo stato che meglio descrive il tuo immobile.
+      </p>
+
+      {CONSERVATION_STATES.map((cs) => {
+        const range = quotationsByState[cs.key];
+        const isSelected = details.conservation_state === cs.key;
+        return (
+          <div
+            key={cs.key}
+            className={`
+              border-2 rounded-md px-3 py-2.5 cursor-pointer transition-all
+              ${isSelected
+                ? "border-accent bg-accent/10"
+                : "border-border bg-bg-surface hover:border-border-light"
+              }
+            `}
+            onClick={() => onUpdate("conservation_state", cs.key)}
+          >
+            <div className="flex justify-between items-center text-[0.85rem]">
+              <strong className="text-text-primary">{cs.label}</strong>
+              {range && (
+                <span className="text-[0.75rem] text-accent font-semibold">
+                  {range.min.toLocaleString("it-IT")} - {range.max.toLocaleString("it-IT")} EUR/m2
+                  {range.prevalent && (
+                    <span className="ml-1.5 px-1.5 py-px rounded-full bg-success-muted text-success text-[0.65rem]">
+                      prevalente
+                    </span>
+                  )}
+                </span>
+              )}
+            </div>
+            <p className="m-0 mt-1 text-[0.75rem] text-text-tertiary">{cs.desc}</p>
+          </div>
+        );
+      })}
+
+      <button
+        className="self-end px-4 py-2 bg-accent text-bg-primary border-none rounded-md text-[0.85rem] font-semibold cursor-pointer hover:bg-accent-hover transition-colors"
+        onClick={onNext}
+      >
+        Avanti &rarr;
+      </button>
+    </div>
+  );
+}
+
+/* ── Step 2: Property Details ────────────────────────────── */
+
+function DetailsStep({
+  details,
+  totalPct,
+  isLoading,
+  onUpdate,
+  onBack,
+  onCalculate,
+}: {
+  details: PropertyDetails;
+  totalPct: number;
+  isLoading: boolean;
+  onUpdate: (factor: string, value: string) => void;
+  onBack: () => void;
+  onCalculate: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2.5">
+      <p className="m-0 text-[0.9rem] font-semibold text-text-primary">
+        Dettagli dell'immobile
+      </p>
+      <p className="m-0 text-[0.8rem] text-text-tertiary leading-snug">
+        Seleziona le caratteristiche specifiche. L'impatto sul valore e mostrato accanto a ogni opzione.
+      </p>
+
+      {Object.entries(FACTOR_OPTIONS).map(([factor, config]) => (
+        <div key={factor} className="flex flex-col gap-0.5">
+          <label className="text-[0.8rem] font-semibold text-text-secondary">
+            {config.label}
+          </label>
+          <select
+            className="px-2 py-1.5 rounded border border-border text-[0.8rem] bg-bg-surface text-text-primary outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 transition-colors"
+            value={details[factor as keyof PropertyDetails]}
+            onChange={(e) => onUpdate(factor, e.target.value)}
+          >
+            {config.options.map((opt) => (
+              <option key={opt.key} value={opt.key}>
+                {opt.label} ({formatPct(opt.pct)})
+              </option>
+            ))}
+          </select>
+        </div>
+      ))}
+
+      {/* Live coefficient preview */}
+      <div className="flex justify-between items-center px-3 py-2 bg-bg-surface rounded-md border border-border">
+        <span className="text-[0.8rem] text-text-secondary font-semibold">
+          Coefficiente totale:
+        </span>
+        <span className={`text-lg font-bold font-mono ${totalPct >= 0 ? "text-success" : "text-danger"}`}>
+          {formatPct(totalPct)}
+        </span>
+      </div>
+
+      <div className="flex gap-2 justify-between">
+        <button
+          className="px-4 py-2 bg-bg-surface text-text-secondary border border-border rounded-md text-[0.85rem] cursor-pointer hover:bg-bg-primary hover:text-text-primary transition-colors"
+          onClick={onBack}
+        >
+          &larr; Indietro
+        </button>
+        <button
+          className="px-5 py-2 bg-success text-white border-none rounded-md text-[0.85rem] font-semibold cursor-pointer hover:bg-success/80 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          onClick={onCalculate}
+          disabled={isLoading}
+        >
+          {isLoading ? "Calcolo..." : "Calcola valutazione"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ── Step 3: Enhanced Results ────────────────────────────── */
+
 function EnhancedResults({
   isLoading,
   details,
@@ -289,16 +367,24 @@ function EnhancedResults({
   quotationsByState: Record<string, { min: number; max: number; prevalent: boolean }>;
 }) {
   if (isLoading) {
-    return <div style={styles.loading}>Calcolo in corso...</div>;
+    return (
+      <div className="py-5 text-center text-text-tertiary text-[0.9rem]">
+        Calcolo in corso...
+      </div>
+    );
   }
 
-  // Client-side calculation preview (actual server response would be better)
+  // Client-side calculation preview
   const base = quotationsByState[details.conservation_state] ||
     quotationsByState["NORMALE"] ||
     Object.values(quotationsByState)[0];
 
   if (!base) {
-    return <div style={styles.error}>Nessun dato quotazione disponibile per questa zona.</div>;
+    return (
+      <div className="p-2.5 bg-danger-muted text-danger rounded-md text-[0.85rem]">
+        Nessun dato quotazione disponibile per questa zona.
+      </div>
+    );
   }
 
   const multiplier = 1 + totalPct;
@@ -310,347 +396,124 @@ function EnhancedResults({
     : 0;
 
   return (
-    <div style={styles.stepContent}>
-      <div style={styles.resultBox}>
-        <div style={styles.resultLabel}>Stima corretta</div>
-        <div style={styles.resultValue}>
+    <div className="flex flex-col gap-2.5">
+      {/* Main result card */}
+      <div className="bg-accent/10 border border-accent/30 rounded-md p-3.5 text-center">
+        <div className="text-[0.75rem] text-accent font-semibold uppercase tracking-wide">
+          Stima corretta
+        </div>
+        <div className="text-2xl font-bold text-accent my-1 font-mono">
           {formatEur(adjMid * (surface || 1))}
         </div>
-        <div style={styles.resultRange}>
+        <div className="text-[0.85rem] text-accent/80 font-mono">
           {formatEur(adjMin * (surface || 1))} - {formatEur(adjMax * (surface || 1))}
         </div>
-        <div style={styles.resultPer}>
+        <div className="text-[0.75rem] text-text-tertiary mt-1 font-mono">
           {adjMin.toLocaleString("it-IT", { maximumFractionDigits: 0 })} -{" "}
           {adjMax.toLocaleString("it-IT", { maximumFractionDigits: 0 })} EUR/m2
-          <span style={styles.coeffBadge}>{formatPct(totalPct)}</span>
+          <span className={`
+            ml-2 px-2 py-0.5 rounded-full text-[0.7rem] font-bold
+            ${totalPct >= 0 ? "bg-success-muted text-success" : "bg-danger-muted text-danger"}
+          `}>
+            {formatPct(totalPct)}
+          </span>
         </div>
       </div>
 
       {/* Breakdown table */}
-      <div style={styles.breakdownContainer}>
-        <h4 style={styles.breakdownTitle}>Dettaglio coefficienti</h4>
-        <table style={styles.table}>
-          <thead>
-            <tr>
-              <th style={styles.th}>Fattore</th>
-              <th style={styles.th}>Selezione</th>
-              <th style={{ ...styles.th, textAlign: "right" }}>Coefficiente</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr style={styles.tr}>
-              <td style={styles.td}>Stato conservativo</td>
-              <td style={styles.td}>{details.conservation_state}</td>
-              <td style={{ ...styles.td, textAlign: "right" }}>base</td>
-            </tr>
-            {Object.entries(FACTOR_OPTIONS).map(([factor, config]) => {
-              const selected = details[factor as keyof PropertyDetails];
-              const option = config.options.find((o) => o.key === selected);
-              if (!option) return null;
-              return (
-                <tr key={factor} style={styles.tr}>
-                  <td style={styles.td}>{config.label}</td>
-                  <td style={styles.td}>{option.label}</td>
-                  <td style={{
-                    ...styles.td,
-                    textAlign: "right",
-                    color: option.pct > 0 ? "#22543d" : option.pct < 0 ? "#9b2c2c" : "#718096",
-                    fontWeight: option.pct !== 0 ? 600 : 400,
-                  }}>
-                    {formatPct(option.pct)}
-                  </td>
-                </tr>
-              );
-            })}
-            <tr style={{ ...styles.tr, borderTop: "2px solid #2b6cb0" }}>
-              <td style={{ ...styles.td, fontWeight: 700 }} colSpan={2}>
-                Totale coefficiente correttivo
-              </td>
-              <td style={{
-                ...styles.td,
-                textAlign: "right",
-                fontWeight: 700,
-                color: totalPct >= 0 ? "#22543d" : "#9b2c2c",
-              }}>
-                {formatPct(totalPct)}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      <div className="mt-1">
+        <h4 className="m-0 mb-1.5 text-[0.85rem] text-text-primary">
+          Dettaglio coefficienti
+        </h4>
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-[0.75rem]">
+            <thead>
+              <tr>
+                <th className="p-1.5 px-2 text-left border-b-2 border-border text-text-secondary font-semibold">
+                  Fattore
+                </th>
+                <th className="p-1.5 px-2 text-left border-b-2 border-border text-text-secondary font-semibold">
+                  Selezione
+                </th>
+                <th className="p-1.5 px-2 text-right border-b-2 border-border text-text-secondary font-semibold">
+                  Coefficiente
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-b border-border/50">
+                <td className="p-1.5 px-2 text-text-secondary">Stato conservativo</td>
+                <td className="p-1.5 px-2 text-text-secondary">{details.conservation_state}</td>
+                <td className="p-1.5 px-2 text-right text-text-tertiary">base</td>
+              </tr>
+              {Object.entries(FACTOR_OPTIONS).map(([factor, config]) => {
+                const selected = details[factor as keyof PropertyDetails];
+                const option = config.options.find((o) => o.key === selected);
+                if (!option) return null;
+                return (
+                  <tr key={factor} className="border-b border-border/50">
+                    <td className="p-1.5 px-2 text-text-secondary">{config.label}</td>
+                    <td className="p-1.5 px-2 text-text-secondary">{option.label}</td>
+                    <td className={`
+                      p-1.5 px-2 text-right font-mono
+                      ${option.pct > 0 ? "text-success font-semibold" : ""}
+                      ${option.pct < 0 ? "text-danger font-semibold" : ""}
+                      ${option.pct === 0 ? "text-text-tertiary" : ""}
+                    `}>
+                      {formatPct(option.pct)}
+                    </td>
+                  </tr>
+                );
+              })}
+              <tr className="border-t-2 border-accent">
+                <td className="p-1.5 px-2 font-bold text-text-primary" colSpan={2}>
+                  Totale coefficiente correttivo
+                </td>
+                <td className={`
+                  p-1.5 px-2 text-right font-bold font-mono
+                  ${totalPct >= 0 ? "text-success" : "text-danger"}
+                `}>
+                  {formatPct(totalPct)}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Comparison with basic estimate */}
       {basicValuation.estimate && (
-        <div style={styles.comparisonBox}>
-          <div style={styles.comparisonRow}>
-            <span>Stima base OMI:</span>
-            <span>{formatEur(basicValuation.estimate.mid)}</span>
+        <div className="bg-bg-surface border border-border rounded-md px-3 py-2.5 text-[0.8rem]">
+          <div className="flex justify-between py-0.5">
+            <span className="text-text-secondary">Stima base OMI:</span>
+            <span className="text-text-primary font-mono">
+              {formatEur(basicValuation.estimate.mid)}
+            </span>
           </div>
-          <div style={styles.comparisonRow}>
-            <span>Stima corretta:</span>
-            <span style={{ fontWeight: 700, color: "#2b6cb0" }}>
+          <div className="flex justify-between py-0.5">
+            <span className="text-text-secondary">Stima corretta:</span>
+            <span className="font-bold text-accent font-mono">
               {formatEur(adjMid * (surface || 1))}
             </span>
           </div>
-          <div style={styles.comparisonRow}>
-            <span>Differenza:</span>
-            <span style={{
-              fontWeight: 600,
-              color: adjMid * (surface || 1) > basicValuation.estimate.mid ? "#22543d" : "#9b2c2c",
-            }}>
+          <div className="flex justify-between py-0.5">
+            <span className="text-text-secondary">Differenza:</span>
+            <span className={`
+              font-semibold font-mono
+              ${adjMid * (surface || 1) > basicValuation.estimate.mid ? "text-success" : "text-danger"}
+            `}>
               {formatEur(adjMid * (surface || 1) - basicValuation.estimate.mid)}
             </span>
           </div>
         </div>
       )}
 
-      <button style={styles.backBtn} onClick={() => window.location.reload()}>
+      <button
+        className="px-4 py-2 bg-bg-surface text-text-secondary border border-border rounded-md text-[0.85rem] cursor-pointer hover:bg-bg-primary hover:text-text-primary transition-colors self-start"
+        onClick={() => window.location.reload()}
+      >
         Nuova valutazione
       </button>
     </div>
   );
 }
-
-const styles = {
-  container: {
-    backgroundColor: "white",
-    borderRadius: "8px",
-    padding: "16px",
-    boxShadow: "0 1px 3px rgba(0,0,0,0.12)",
-    border: "1px solid #e2e8f0",
-  } as React.CSSProperties,
-  headerRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: "12px",
-  } as React.CSSProperties,
-  title: {
-    margin: 0,
-    fontSize: "1rem",
-    color: "#1a365d",
-  } as React.CSSProperties,
-  stepIndicator: {
-    display: "flex",
-    gap: "6px",
-  } as React.CSSProperties,
-  stepDot: {
-    width: "24px",
-    height: "24px",
-    borderRadius: "50%",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: "0.7rem",
-    fontWeight: 700,
-    cursor: "pointer",
-  } as React.CSSProperties,
-  stepContent: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "10px",
-  } as React.CSSProperties,
-  stepLabel: {
-    margin: 0,
-    fontSize: "0.9rem",
-    fontWeight: 600,
-    color: "#2d3748",
-  } as React.CSSProperties,
-  hint: {
-    margin: 0,
-    fontSize: "0.8rem",
-    color: "#718096",
-    lineHeight: 1.4,
-  } as React.CSSProperties,
-  stateCard: {
-    border: "2px solid #e2e8f0",
-    borderRadius: "6px",
-    padding: "10px 12px",
-    cursor: "pointer",
-    transition: "all 0.15s",
-  } as React.CSSProperties,
-  stateHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    fontSize: "0.85rem",
-  } as React.CSSProperties,
-  stateRange: {
-    fontSize: "0.75rem",
-    color: "#2b6cb0",
-    fontWeight: 600,
-  } as React.CSSProperties,
-  prevalentBadge: {
-    marginLeft: "6px",
-    padding: "1px 6px",
-    backgroundColor: "#c6f6d5",
-    color: "#22543d",
-    borderRadius: "8px",
-    fontSize: "0.65rem",
-  } as React.CSSProperties,
-  stateDesc: {
-    margin: "4px 0 0",
-    fontSize: "0.75rem",
-    color: "#718096",
-  } as React.CSSProperties,
-  factorGroup: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "3px",
-  } as React.CSSProperties,
-  factorLabel: {
-    fontSize: "0.8rem",
-    fontWeight: 600,
-    color: "#4a5568",
-  } as React.CSSProperties,
-  select: {
-    padding: "6px 8px",
-    borderRadius: "4px",
-    border: "1px solid #e2e8f0",
-    fontSize: "0.8rem",
-    backgroundColor: "#fff",
-  } as React.CSSProperties,
-  previewBox: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: "8px 12px",
-    backgroundColor: "#f7fafc",
-    borderRadius: "6px",
-    border: "1px solid #e2e8f0",
-  } as React.CSSProperties,
-  previewLabel: {
-    fontSize: "0.8rem",
-    color: "#4a5568",
-    fontWeight: 600,
-  } as React.CSSProperties,
-  previewValue: {
-    fontSize: "1.1rem",
-    fontWeight: 700,
-  } as React.CSSProperties,
-  buttonRow: {
-    display: "flex",
-    gap: "8px",
-    justifyContent: "space-between",
-  } as React.CSSProperties,
-  nextBtn: {
-    padding: "8px 16px",
-    backgroundColor: "#2b6cb0",
-    color: "#fff",
-    border: "none",
-    borderRadius: "6px",
-    fontSize: "0.85rem",
-    fontWeight: 600,
-    cursor: "pointer",
-    alignSelf: "flex-end",
-  } as React.CSSProperties,
-  backBtn: {
-    padding: "8px 16px",
-    backgroundColor: "#edf2f7",
-    color: "#4a5568",
-    border: "none",
-    borderRadius: "6px",
-    fontSize: "0.85rem",
-    cursor: "pointer",
-  } as React.CSSProperties,
-  calculateBtn: {
-    padding: "8px 20px",
-    backgroundColor: "#38a169",
-    color: "#fff",
-    border: "none",
-    borderRadius: "6px",
-    fontSize: "0.85rem",
-    fontWeight: 600,
-    cursor: "pointer",
-  } as React.CSSProperties,
-  loading: {
-    padding: "20px",
-    textAlign: "center",
-    color: "#718096",
-    fontSize: "0.9rem",
-  } as React.CSSProperties,
-  error: {
-    padding: "10px",
-    backgroundColor: "#fed7d7",
-    color: "#9b2c2c",
-    borderRadius: "6px",
-    fontSize: "0.85rem",
-  } as React.CSSProperties,
-  resultBox: {
-    backgroundColor: "#ebf8ff",
-    border: "1px solid #bee3f8",
-    borderRadius: "6px",
-    padding: "14px",
-    textAlign: "center",
-  } as React.CSSProperties,
-  resultLabel: {
-    fontSize: "0.75rem",
-    color: "#2b6cb0",
-    fontWeight: 600,
-    textTransform: "uppercase",
-    letterSpacing: "0.05em",
-  } as React.CSSProperties,
-  resultValue: {
-    fontSize: "1.6rem",
-    fontWeight: 700,
-    color: "#1a365d",
-    margin: "4px 0",
-  } as React.CSSProperties,
-  resultRange: {
-    fontSize: "0.85rem",
-    color: "#2b6cb0",
-  } as React.CSSProperties,
-  resultPer: {
-    fontSize: "0.75rem",
-    color: "#63b3ed",
-    marginTop: "4px",
-  } as React.CSSProperties,
-  coeffBadge: {
-    marginLeft: "8px",
-    padding: "2px 8px",
-    backgroundColor: "#2b6cb0",
-    color: "#fff",
-    borderRadius: "10px",
-    fontSize: "0.7rem",
-    fontWeight: 700,
-  } as React.CSSProperties,
-  breakdownContainer: {
-    marginTop: "4px",
-  } as React.CSSProperties,
-  breakdownTitle: {
-    margin: "0 0 6px",
-    fontSize: "0.85rem",
-    color: "#2d3748",
-  } as React.CSSProperties,
-  table: {
-    width: "100%",
-    borderCollapse: "collapse",
-    fontSize: "0.75rem",
-  } as React.CSSProperties,
-  th: {
-    padding: "6px 8px",
-    textAlign: "left",
-    borderBottom: "2px solid #e2e8f0",
-    color: "#4a5568",
-    fontWeight: 600,
-  } as React.CSSProperties,
-  tr: {
-    borderBottom: "1px solid #f7fafc",
-  } as React.CSSProperties,
-  td: {
-    padding: "5px 8px",
-    color: "#4a5568",
-  } as React.CSSProperties,
-  comparisonBox: {
-    backgroundColor: "#fffff0",
-    border: "1px solid #fefcbf",
-    borderRadius: "6px",
-    padding: "10px 12px",
-    fontSize: "0.8rem",
-  } as React.CSSProperties,
-  comparisonRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    padding: "3px 0",
-  } as React.CSSProperties,
-};

@@ -11,23 +11,29 @@ function InsightCard({ title, icon, children, defaultOpen = false }: InsightCard
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
   return (
-    <div style={styles.card}>
-      <div style={styles.cardHeader} onClick={() => setIsOpen(!isOpen)}>
-        <span style={styles.cardIcon}>{icon}</span>
-        <span style={styles.cardTitle}>{title}</span>
-        <span style={styles.chevron}>{isOpen ? "▲" : "▼"}</span>
+    <div className="border border-border rounded-md mb-2 overflow-hidden">
+      <div
+        className="flex items-center gap-2 px-3 py-2.5 bg-bg-surface cursor-pointer select-none hover:bg-bg-surface/80 transition-colors"
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <span className="text-base">{icon}</span>
+        <span className="flex-1 text-sm font-semibold text-text-primary">{title}</span>
+        <span className="text-[0.6rem] text-text-tertiary">{isOpen ? "\u25B2" : "\u25BC"}</span>
       </div>
-      {isOpen && <div style={styles.cardBody}>{children}</div>}
+      {isOpen && (
+        <div className="p-3 text-xs leading-relaxed text-text-secondary">
+          {children}
+        </div>
+      )}
     </div>
   );
 }
 
 interface AgentIncentivesProps {
-  estimatedValue?: number;  // The adjusted estimate total, if available
+  estimatedValue?: number;
 }
 
 export function AgentIncentives({ estimatedValue }: AgentIncentivesProps) {
-  // Dynamic commission math
   const salePrice = estimatedValue || 500000;
   const commissionRate = 0.03;
   const commission = salePrice * commissionRate;
@@ -35,40 +41,38 @@ export function AgentIncentives({ estimatedValue }: AgentIncentivesProps) {
   const extraCommission = extraSalePrice * commissionRate;
 
   return (
-    <div style={styles.container}>
-      <h3 style={styles.title}>Capire gli incentivi dell'agente immobiliare</h3>
-      <p style={styles.subtitle}>
+    <div className="bg-bg-elevated rounded-lg p-4 shadow-md border border-border">
+      <h3 className="mb-0.5 text-base text-text-primary">
+        Capire gli incentivi dell'agente immobiliare
+      </h3>
+      <p className="mb-3 text-xs text-text-tertiary">
         Informazioni essenziali per chi vende (o compra) casa
       </p>
 
-      <InsightCard
-        title="Il problema Freakonomics"
-        icon="📊"
-        defaultOpen={true}
-      >
-        <p style={styles.text}>
-          Lo studio di <strong>Levitt & Syvester</strong> (reso celebre nel libro <em>Freakonomics</em>)
-          ha rivelato un dato sorprendente: quando gli agenti immobiliari vendono la <strong>propria</strong> casa,
-          la tengono sul mercato <strong>10 giorni in piu</strong> e ottengono un prezzo <strong>superiore del 10%</strong> rispetto
+      <InsightCard title="Il problema Freakonomics" icon="📊" defaultOpen={true}>
+        <p className="mb-2">
+          Lo studio di <strong className="text-text-primary">Levitt & Syvester</strong> (reso celebre nel libro <em>Freakonomics</em>)
+          ha rivelato un dato sorprendente: quando gli agenti immobiliari vendono la <strong className="text-text-primary">propria</strong> casa,
+          la tengono sul mercato <strong className="text-text-primary">10 giorni in piu</strong> e ottengono un prezzo <strong className="text-text-primary">superiore del 10%</strong> rispetto
           a quando vendono la casa di un cliente.
         </p>
-        <div style={styles.mathBox}>
-          <div style={styles.mathRow}>
+        <div className="bg-bg-surface border border-border rounded-md px-3 py-2.5 my-2">
+          <div className="flex justify-between py-0.5 text-xs">
             <span>Prezzo di vendita:</span>
-            <span style={styles.mathValue}>{formatEur(salePrice)}</span>
+            <span className="font-semibold font-mono text-text-primary">{formatEur(salePrice)}</span>
           </div>
-          <div style={styles.mathRow}>
+          <div className="flex justify-between py-0.5 text-xs">
             <span>Commissione agente (3%):</span>
-            <span style={styles.mathValue}>{formatEur(commission)}</span>
+            <span className="font-semibold font-mono text-text-primary">{formatEur(commission)}</span>
           </div>
-          <div style={{ ...styles.mathRow, borderTop: "1px dashed #cbd5e0", paddingTop: "6px" }}>
+          <div className="flex justify-between py-0.5 text-xs border-t border-dashed border-border-light pt-1.5">
             <span>Se vende a +{formatEur(extraSalePrice)}:</span>
-            <span style={styles.mathValue}>
+            <span className="font-semibold font-mono text-text-primary">
               +{formatEur(extraCommission)} per l'agente
             </span>
           </div>
         </div>
-        <p style={styles.highlight}>
+        <p className="mt-2 px-2.5 py-2 bg-accent-muted border border-accent/30 rounded text-xs leading-snug text-accent">
           Un extra di {formatEur(extraSalePrice)} nel prezzo di vendita frutta all'agente solo {formatEur(extraCommission)} in piu
           di commissione, ma potrebbe richiedere settimane di attesa. L'incentivo dell'agente e chiudere in fretta,
           non massimizzare il tuo prezzo.
@@ -76,54 +80,54 @@ export function AgentIncentives({ estimatedValue }: AgentIncentivesProps) {
       </InsightCard>
 
       <InsightCard title="Perche l'agenzia valuta meno" icon="💰">
-        <p style={styles.text}>
-          Le agenzie spesso usano i valori OMI per lo stato <strong>"NORMALE"</strong> come base,
+        <p className="mb-2">
+          Le agenzie spesso usano i valori OMI per lo stato <strong className="text-text-primary">"NORMALE"</strong> come base,
           senza applicare i coefficienti correttivi per ristrutturazione, piano, silenziosita.
         </p>
-        <ul style={styles.list}>
+        <ul className="my-1.5 pl-5 text-xs leading-relaxed list-disc">
           <li>
-            <strong>Valutazione conservativa</strong>: una valutazione bassa attira piu potenziali acquirenti
+            <strong className="text-text-primary">Valutazione conservativa</strong>: una valutazione bassa attira piu potenziali acquirenti
             e velocizza la vendita
           </li>
           <li>
-            <strong>Commissione quasi invariata</strong>: su una differenza di {formatEur(100000)},
+            <strong className="text-text-primary">Commissione quasi invariata</strong>: su una differenza di {formatEur(100000)},
             l'agente perde solo {formatEur(100000 * commissionRate)} di commissione
           </li>
           <li>
-            <strong>Volume vs. valore</strong>: vendere 10 case al mese a prezzo ribassato rende piu
+            <strong className="text-text-primary">Volume vs. valore</strong>: vendere 10 case al mese a prezzo ribassato rende piu
             di venderne 5 al prezzo giusto
           </li>
         </ul>
-        <div style={styles.warningBox}>
+        <div className="mt-2 px-3 py-2.5 bg-danger-muted border border-danger/30 rounded-md text-xs text-danger leading-snug">
           Quando un'agenzia sottovaluta di {formatEur(100000)}, perde solo {formatEur(100000 * commissionRate)} di
           commissione &mdash; ma <strong>tu perdi {formatEur(100000)}</strong>.
         </div>
       </InsightCard>
 
-      <InsightCard title="Dove un buon agente fa la differenza" icon="\u2B50">
-        <p style={styles.text}>
+      <InsightCard title="Dove un buon agente fa la differenza" icon={"\u2B50"}>
+        <p className="mb-2">
           Un agente competente e motivato puo effettivamente giustificare la sua commissione:
         </p>
-        <div style={styles.valueGrid}>
-          <div style={styles.valueItem}>
-            <strong>Conoscenza del mercato</strong>
-            <p>Sa quali acquirenti cercano esattamente il tuo tipo di immobile. Ha un database di contatti qualificati.</p>
+        <div className="flex flex-col gap-2 mt-2">
+          <div className="px-2.5 py-2 bg-success-muted border border-success/30 rounded text-[0.78rem] leading-snug">
+            <strong className="text-success">Conoscenza del mercato</strong>
+            <p className="text-text-secondary mt-0.5">Sa quali acquirenti cercano esattamente il tuo tipo di immobile. Ha un database di contatti qualificati.</p>
           </div>
-          <div style={styles.valueItem}>
-            <strong>Negoziazione professionale</strong>
-            <p>Un agente esperto ottiene il 5-10% in piu attraverso tecniche di negoziazione. Il costo della commissione si ripaga.</p>
+          <div className="px-2.5 py-2 bg-success-muted border border-success/30 rounded text-[0.78rem] leading-snug">
+            <strong className="text-success">Negoziazione professionale</strong>
+            <p className="text-text-secondary mt-0.5">Un agente esperto ottiene il 5-10% in piu attraverso tecniche di negoziazione. Il costo della commissione si ripaga.</p>
           </div>
-          <div style={styles.valueItem}>
-            <strong>Qualificazione acquirenti</strong>
-            <p>Filtra i perditempo, verifica la pre-approvazione del mutuo, riduce i rischi di trattative che saltano.</p>
+          <div className="px-2.5 py-2 bg-success-muted border border-success/30 rounded text-[0.78rem] leading-snug">
+            <strong className="text-success">Qualificazione acquirenti</strong>
+            <p className="text-text-secondary mt-0.5">Filtra i perditempo, verifica la pre-approvazione del mutuo, riduce i rischi di trattative che saltano.</p>
           </div>
-          <div style={styles.valueItem}>
-            <strong>Home staging</strong>
-            <p>Piccoli investimenti (500-2.000 EUR) che rendono 5-10x. Spostare un mobile, una mano di vernice, foto professionali.</p>
+          <div className="px-2.5 py-2 bg-success-muted border border-success/30 rounded text-[0.78rem] leading-snug">
+            <strong className="text-success">Home staging</strong>
+            <p className="text-text-secondary mt-0.5">Piccoli investimenti (500-2.000 EUR) che rendono 5-10x. Spostare un mobile, una mano di vernice, foto professionali.</p>
           </div>
-          <div style={styles.valueItem}>
-            <strong>Strategia di prezzo</strong>
-            <p>
+          <div className="px-2.5 py-2 bg-success-muted border border-success/30 rounded text-[0.78rem] leading-snug">
+            <strong className="text-success">Strategia di prezzo</strong>
+            <p className="text-text-secondary mt-0.5">
               L'<em>effetto prime 2 settimane</em>: immobili correttamente prezzati ottengono il 94% del prezzo richiesto.
               Quelli sovraprezzati che restano mesi sul mercato scendono al 90%.
             </p>
@@ -132,29 +136,29 @@ export function AgentIncentives({ estimatedValue }: AgentIncentivesProps) {
       </InsightCard>
 
       <InsightCard title="Come scegliere un agente" icon="🔍">
-        <ol style={styles.numberedList}>
+        <ol className="my-1.5 pl-5 text-xs leading-relaxed list-decimal">
           <li>
-            <strong>Chiedi: "Quali vendite comparabili in questo edificio/strada supportano la tua valutazione?"</strong>
-            <p style={styles.listDetail}>
+            <strong className="text-text-primary">"Quali vendite comparabili in questo edificio/strada supportano la tua valutazione?"</strong>
+            <p className="mt-0.5 mb-2 text-text-tertiary text-[0.78rem]">
               Se non puo citare transazioni specifiche, sta tirando a indovinare.
             </p>
           </li>
           <li>
-            <strong>Confronta: ottieni almeno 3 valutazioni</strong>
-            <p style={styles.listDetail}>
+            <strong className="text-text-primary">Confronta: ottieni almeno 3 valutazioni</strong>
+            <p className="mt-0.5 mb-2 text-text-tertiary text-[0.78rem]">
               Diffida sia della piu bassa (vuole vendere in fretta) che della piu alta (vuole il mandato).
               La valutazione giusta e quella documentata.
             </p>
           </li>
           <li>
-            <strong>Negozia la commissione</strong>
-            <p style={styles.listDetail}>
+            <strong className="text-text-primary">Negozia la commissione</strong>
+            <p className="mt-0.5 mb-2 text-text-tertiary text-[0.78rem]">
               Il 2-3% e la norma in Italia. Evita esclusivita lunghe: massimo 3 mesi con clausola di uscita.
             </p>
           </li>
           <li>
-            <strong>Verifica il track record</strong>
-            <p style={styles.listDetail}>
+            <strong className="text-text-primary">Verifica il track record</strong>
+            <p className="mt-0.5 mb-2 text-text-tertiary text-[0.78rem]">
               Quante vendite ha concluso nella tua zona? Qual e il rapporto prezzo richiesto / prezzo finale?
               Un buon agente e sopra il 95%.
             </p>
@@ -172,128 +176,3 @@ function formatEur(value: number): string {
     maximumFractionDigits: 0,
   }).format(value);
 }
-
-const styles = {
-  container: {
-    backgroundColor: "white",
-    borderRadius: "8px",
-    padding: "16px",
-    boxShadow: "0 1px 3px rgba(0,0,0,0.12)",
-    border: "1px solid #e2e8f0",
-  } as React.CSSProperties,
-  title: {
-    margin: "0 0 2px",
-    fontSize: "1rem",
-    color: "#1a365d",
-  } as React.CSSProperties,
-  subtitle: {
-    margin: "0 0 12px",
-    fontSize: "0.8rem",
-    color: "#718096",
-  } as React.CSSProperties,
-  card: {
-    border: "1px solid #e2e8f0",
-    borderRadius: "6px",
-    marginBottom: "8px",
-    overflow: "hidden",
-  } as React.CSSProperties,
-  cardHeader: {
-    display: "flex",
-    alignItems: "center",
-    gap: "8px",
-    padding: "10px 12px",
-    backgroundColor: "#f7fafc",
-    cursor: "pointer",
-    userSelect: "none",
-  } as React.CSSProperties,
-  cardIcon: {
-    fontSize: "1rem",
-  } as React.CSSProperties,
-  cardTitle: {
-    flex: 1,
-    fontSize: "0.85rem",
-    fontWeight: 600,
-    color: "#2d3748",
-  } as React.CSSProperties,
-  chevron: {
-    fontSize: "0.6rem",
-    color: "#a0aec0",
-  } as React.CSSProperties,
-  cardBody: {
-    padding: "12px",
-    fontSize: "0.8rem",
-    lineHeight: 1.5,
-    color: "#4a5568",
-  } as React.CSSProperties,
-  text: {
-    margin: "0 0 8px",
-  } as React.CSSProperties,
-  mathBox: {
-    backgroundColor: "#f7fafc",
-    border: "1px solid #e2e8f0",
-    borderRadius: "6px",
-    padding: "10px 12px",
-    margin: "8px 0",
-  } as React.CSSProperties,
-  mathRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    padding: "3px 0",
-    fontSize: "0.8rem",
-  } as React.CSSProperties,
-  mathValue: {
-    fontWeight: 600,
-    fontFamily: "monospace",
-  } as React.CSSProperties,
-  highlight: {
-    margin: "8px 0 0",
-    padding: "8px 10px",
-    backgroundColor: "#fffff0",
-    border: "1px solid #fefcbf",
-    borderRadius: "4px",
-    fontSize: "0.8rem",
-    lineHeight: 1.4,
-    color: "#744210",
-  } as React.CSSProperties,
-  list: {
-    margin: "6px 0",
-    paddingLeft: "20px",
-    fontSize: "0.8rem",
-    lineHeight: 1.6,
-  } as React.CSSProperties,
-  warningBox: {
-    marginTop: "8px",
-    padding: "10px 12px",
-    backgroundColor: "#fed7d7",
-    border: "1px solid #feb2b2",
-    borderRadius: "6px",
-    fontSize: "0.8rem",
-    color: "#742a2a",
-    lineHeight: 1.4,
-  } as React.CSSProperties,
-  valueGrid: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "8px",
-    marginTop: "8px",
-  } as React.CSSProperties,
-  valueItem: {
-    padding: "8px 10px",
-    backgroundColor: "#f0fff4",
-    border: "1px solid #c6f6d5",
-    borderRadius: "4px",
-    fontSize: "0.78rem",
-    lineHeight: 1.4,
-  } as React.CSSProperties,
-  numberedList: {
-    margin: "6px 0",
-    paddingLeft: "20px",
-    fontSize: "0.8rem",
-    lineHeight: 1.5,
-  } as React.CSSProperties,
-  listDetail: {
-    margin: "2px 0 8px",
-    color: "#718096",
-    fontSize: "0.78rem",
-  } as React.CSSProperties,
-};

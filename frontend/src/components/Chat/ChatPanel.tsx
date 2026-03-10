@@ -126,7 +126,6 @@ export function ChatPanel({ onMapUpdate }: ChatPanelProps) {
     const trimmed = input.trim();
     if ((!trimmed && pendingDocs.length === 0) || isStreaming) return;
 
-    // Add user message (with optional documents)
     const userMsg: ChatMessage = {
       id: nextId(),
       role: "user",
@@ -134,11 +133,9 @@ export function ChatPanel({ onMapUpdate }: ChatPanelProps) {
       documents: pendingDocs.length > 0 ? [...pendingDocs] : undefined,
     };
 
-    // Clear pending docs
     const currentDocs = [...pendingDocs];
     setPendingDocs([]);
 
-    // Create placeholder for assistant response
     const assistantId = nextId();
     const assistantMsg: ChatMessage = {
       id: assistantId,
@@ -152,8 +149,6 @@ export function ChatPanel({ onMapUpdate }: ChatPanelProps) {
     setInput("");
     setIsStreaming(true);
 
-    // Build conversation history for API (exclude welcome message)
-    // Only include document_ids for the LAST user message (avoids TTL expiration on replay)
     const allMsgs = [...messages.filter((m) => m.id !== "welcome"), userMsg];
     const history = allMsgs.map((m, idx) => ({
       role: m.role,
@@ -215,7 +210,6 @@ export function ChatPanel({ onMapUpdate }: ChatPanelProps) {
       );
     } catch (err) {
       if ((err as Error).name !== "AbortError") {
-        // If document expired, mention it
         const errMsg = (err as Error).message;
         const isDocExpired = errMsg.includes("scaduto");
         setMessages((prev) =>
@@ -231,7 +225,6 @@ export function ChatPanel({ onMapUpdate }: ChatPanelProps) {
               : m
           )
         );
-        // If docs expired, restore them so user can retry
         if (isDocExpired && currentDocs.length > 0) {
           setPendingDocs(currentDocs);
         }
@@ -262,21 +255,24 @@ export function ChatPanel({ onMapUpdate }: ChatPanelProps) {
   );
 
   const canSend = input.trim() || pendingDocs.length > 0;
+  const isAttachDisabled = isStreaming || isUploading || pendingDocs.length >= MAX_FILES;
 
   return (
-    <div style={styles.container}>
+    <div className="flex flex-col h-full overflow-hidden bg-bg-elevated">
       {/* Messages area with drag-and-drop */}
       <div
-        style={{
-          ...styles.messages,
-          ...(isDragOver ? styles.messagesDragOver : {}),
-        }}
+        className={`
+          flex-1 overflow-y-auto p-4 flex flex-col relative
+          ${isDragOver ? "bg-accent-muted/30" : ""}
+        `}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
         {isDragOver && (
-          <div style={styles.dropOverlay}>Trascina qui i tuoi PDF</div>
+          <div className="absolute inset-2 flex items-center justify-center bg-accent-muted/20 border-2 border-dashed border-accent rounded-xl text-sm text-accent font-semibold z-10 pointer-events-none">
+            Trascina qui i tuoi PDF
+          </div>
         )}
         {messages.map((msg) => (
           <ChatMessageBubble key={msg.id} message={msg} />
@@ -285,37 +281,43 @@ export function ChatPanel({ onMapUpdate }: ChatPanelProps) {
       </div>
 
       {/* Input bar */}
-      <div style={styles.inputBar}>
+      <div className="flex gap-2 p-3 border-t border-border bg-bg-primary items-end">
         {/* Hidden file input */}
         <input
           ref={fileInputRef}
           type="file"
           accept="application/pdf"
           multiple
-          style={{ display: "none" }}
+          className="hidden"
           onChange={(e) => handleFileSelect(e.target.files)}
         />
 
         {/* Paperclip upload button */}
         <button
           onClick={() => fileInputRef.current?.click()}
-          style={{
-            ...styles.attachButton,
-            opacity: isStreaming || isUploading || pendingDocs.length >= MAX_FILES ? 0.4 : 1,
-          }}
-          disabled={isStreaming || isUploading || pendingDocs.length >= MAX_FILES}
+          className={`
+            w-9 h-9 rounded-full border border-border bg-bg-surface
+            text-lg flex items-center justify-center shrink-0
+            hover:border-border-light hover:bg-bg-elevated
+            transition-colors cursor-pointer
+            ${isAttachDisabled ? "opacity-40 cursor-not-allowed" : ""}
+          `}
+          disabled={isAttachDisabled}
           title="Allega PDF"
         >
           {isUploading ? "..." : "\uD83D\uDCCE"}
         </button>
 
         {/* Textarea + pending docs */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column" as const }}>
+        <div className="flex-1 flex flex-col">
           {/* Pending document chips */}
           {pendingDocs.length > 0 && (
-            <div style={styles.pendingDocsRow}>
+            <div className="flex flex-wrap gap-1 pb-1.5">
               {pendingDocs.map((doc) => (
-                <span key={doc.docId} style={styles.docChip}>
+                <span
+                  key={doc.docId}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-accent-muted text-accent text-xs font-semibold border border-accent/30"
+                >
                   📄 {doc.filename}
                   <button
                     onClick={() =>
@@ -323,7 +325,7 @@ export function ChatPanel({ onMapUpdate }: ChatPanelProps) {
                         prev.filter((d) => d.docId !== doc.docId)
                       )
                     }
-                    style={styles.removeChip}
+                    className="text-text-tertiary hover:text-text-secondary text-[0.65rem] px-0.5 cursor-pointer bg-transparent border-none"
                     title="Rimuovi"
                   >
                     ✕
@@ -342,7 +344,16 @@ export function ChatPanel({ onMapUpdate }: ChatPanelProps) {
                 ? "Scrivi un messaggio o premi Invio per analizzare..."
                 : "Scrivi un indirizzo da valutare..."
             }
-            style={styles.textarea}
+            className="
+              flex-1 resize-none border border-border rounded-xl
+              px-3.5 py-2.5 text-sm leading-relaxed
+              font-[inherit] outline-none
+              max-h-[120px] min-h-[40px]
+              bg-bg-surface text-text-primary
+              placeholder:text-text-tertiary
+              focus:border-accent/50 focus:ring-1 focus:ring-accent/20
+              transition-colors
+            "
             rows={1}
             disabled={isStreaming}
           />
@@ -350,16 +361,23 @@ export function ChatPanel({ onMapUpdate }: ChatPanelProps) {
 
         {/* Send / Stop button */}
         {isStreaming ? (
-          <button onClick={handleStop} style={styles.stopButton} title="Ferma">
+          <button
+            onClick={handleStop}
+            className="w-9 h-9 rounded-full bg-danger text-white text-sm flex items-center justify-center shrink-0 cursor-pointer border-none hover:bg-danger/80 transition-colors"
+            title="Ferma"
+          >
             ■
           </button>
         ) : (
           <button
             onClick={handleSend}
-            style={{
-              ...styles.sendButton,
-              opacity: canSend ? 1 : 0.4,
-            }}
+            className={`
+              w-9 h-9 rounded-full bg-accent text-bg-primary
+              text-lg font-bold flex items-center justify-center shrink-0
+              cursor-pointer border-none
+              hover:bg-accent-hover transition-colors
+              ${canSend ? "opacity-100" : "opacity-40 cursor-not-allowed"}
+            `}
             disabled={!canSend}
             title="Invia"
           >
@@ -370,128 +388,3 @@ export function ChatPanel({ onMapUpdate }: ChatPanelProps) {
     </div>
   );
 }
-
-const styles = {
-  container: {
-    display: "flex",
-    flexDirection: "column" as const,
-    height: "100%",
-    overflow: "hidden",
-  } as React.CSSProperties,
-  messages: {
-    flex: 1,
-    overflowY: "auto" as const,
-    padding: "16px 12px",
-    display: "flex",
-    flexDirection: "column" as const,
-    position: "relative" as const,
-  } as React.CSSProperties,
-  messagesDragOver: {
-    backgroundColor: "#ebf8ff",
-  } as React.CSSProperties,
-  dropOverlay: {
-    position: "absolute" as const,
-    inset: "8px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(43, 108, 176, 0.08)",
-    border: "2px dashed #2b6cb0",
-    borderRadius: "8px",
-    fontSize: "0.9rem",
-    color: "#2b6cb0",
-    fontWeight: 600,
-    zIndex: 10,
-    pointerEvents: "none" as const,
-  } as React.CSSProperties,
-  inputBar: {
-    display: "flex",
-    gap: "8px",
-    padding: "12px",
-    borderTop: "1px solid #e2e8f0",
-    backgroundColor: "#fff",
-    alignItems: "flex-end",
-  } as React.CSSProperties,
-  attachButton: {
-    width: "36px",
-    height: "36px",
-    borderRadius: "50%",
-    border: "1px solid #e2e8f0",
-    backgroundColor: "#fff",
-    fontSize: "1.1rem",
-    cursor: "pointer",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  } as React.CSSProperties,
-  pendingDocsRow: {
-    display: "flex",
-    flexWrap: "wrap" as const,
-    gap: "4px",
-    padding: "4px 0 6px 0",
-  } as React.CSSProperties,
-  docChip: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "4px",
-    padding: "2px 8px",
-    borderRadius: "12px",
-    backgroundColor: "#ebf8ff",
-    color: "#2b6cb0",
-    fontSize: "0.72rem",
-    fontWeight: 600,
-    border: "1px solid #bee3f8",
-  } as React.CSSProperties,
-  removeChip: {
-    background: "none",
-    border: "none",
-    color: "#a0aec0",
-    cursor: "pointer",
-    fontSize: "0.7rem",
-    padding: "0 2px",
-    lineHeight: 1,
-  } as React.CSSProperties,
-  textarea: {
-    flex: 1,
-    resize: "none" as const,
-    border: "1px solid #e2e8f0",
-    borderRadius: "12px",
-    padding: "10px 14px",
-    fontSize: "0.85rem",
-    lineHeight: 1.5,
-    fontFamily: "inherit",
-    outline: "none",
-    maxHeight: "120px",
-    minHeight: "40px",
-  } as React.CSSProperties,
-  sendButton: {
-    width: "36px",
-    height: "36px",
-    borderRadius: "50%",
-    border: "none",
-    backgroundColor: "#2b6cb0",
-    color: "#fff",
-    fontSize: "1.1rem",
-    fontWeight: 700,
-    cursor: "pointer",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  } as React.CSSProperties,
-  stopButton: {
-    width: "36px",
-    height: "36px",
-    borderRadius: "50%",
-    border: "none",
-    backgroundColor: "#e53e3e",
-    color: "#fff",
-    fontSize: "0.9rem",
-    cursor: "pointer",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  } as React.CSSProperties,
-};

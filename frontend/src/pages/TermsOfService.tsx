@@ -2,17 +2,26 @@ import { Link } from "react-router-dom";
 
 export function TermsOfService() {
   return (
-    <div style={styles.container}>
-      <div style={styles.content}>
-        <Link to="/" style={styles.backLink}>
+    <div className="min-h-screen bg-bg-primary px-5 py-10">
+      <div className="max-w-[720px] mx-auto bg-bg-elevated rounded-xl p-8 md:p-10 shadow-lg border border-border">
+        <Link
+          to="/"
+          className="text-accent no-underline text-sm inline-block mb-6 hover:text-accent-hover transition-colors"
+        >
           &larr; Torna a VendoCasa
         </Link>
 
-        <h1 style={styles.h1}>Termini di Utilizzo</h1>
-        <p style={styles.lastUpdate}>Ultimo aggiornamento: febbraio 2026</p>
+        <h1 className="text-[28px] font-bold text-text-primary m-0 mb-2">
+          Termini di Utilizzo
+        </h1>
+        <p className="text-[13px] text-text-tertiary m-0 mb-8">
+          Ultimo aggiornamento: febbraio 2026
+        </p>
 
-        <section style={styles.section}>
-          <h2 style={styles.h2}>1. Descrizione del Servizio</h2>
+        <section className="mb-7 leading-[1.7] text-[15px] text-text-secondary">
+          <h2 className="text-lg font-semibold text-text-primary m-0 mb-3">
+            1. Descrizione del Servizio
+          </h2>
           <p>
             VendoCasa è uno strumento personale per la valutazione indicativa di
             immobili in Italia, basato sui dati pubblici dell'Osservatorio del
@@ -21,10 +30,12 @@ export function TermsOfService() {
           </p>
         </section>
 
-        <section style={styles.section}>
-          <h2 style={styles.h2}>2. Natura Indicativa delle Valutazioni</h2>
+        <section className="mb-7 leading-[1.7] text-[15px] text-text-secondary">
+          <h2 className="text-lg font-semibold text-text-primary m-0 mb-3">
+            2. Natura Indicativa delle Valutazioni
+          </h2>
           <p>
-            <strong>
+            <strong className="text-text-primary">
               Le valutazioni fornite da VendoCasa sono puramente indicative e
               non costituiscono perizie professionali.
             </strong>
@@ -42,13 +53,15 @@ export function TermsOfService() {
           </p>
         </section>
 
-        <section style={styles.section}>
-          <h2 style={styles.h2}>3. Esclusione di Garanzia</h2>
+        <section className="mb-7 leading-[1.7] text-[15px] text-text-secondary">
+          <h2 className="text-lg font-semibold text-text-primary m-0 mb-3">
+            3. Esclusione di Garanzia
+          </h2>
           <p>
             Il servizio è fornito "così com'è" (<em>as is</em>), senza alcuna
             garanzia, esplicita o implicita. In particolare:
           </p>
-          <ul style={styles.list}>
+          <ul className="pl-6 my-2 space-y-1">
             <li>
               Non si garantisce l'accuratezza, completezza o aggiornamento dei
               dati OMI
@@ -62,8 +75,10 @@ export function TermsOfService() {
           </ul>
         </section>
 
-        <section style={styles.section}>
-          <h2 style={styles.h2}>4. Limitazione di Responsabilità</h2>
+        <section className="mb-7 leading-[1.7] text-[15px] text-text-secondary">
+          <h2 className="text-lg font-semibold text-text-primary m-0 mb-3">
+            4. Limitazione di Responsabilità
+          </h2>
           <p>
             Il titolare del servizio non è responsabile per eventuali danni
             diretti o indiretti derivanti dall'utilizzo delle valutazioni
@@ -72,10 +87,12 @@ export function TermsOfService() {
           </p>
         </section>
 
-        <section style={styles.section}>
-          <h2 style={styles.h2}>5. Uso Consentito</h2>
+        <section className="mb-7 leading-[1.7] text-[15px] text-text-secondary">
+          <h2 className="text-lg font-semibold text-text-primary m-0 mb-3">
+            5. Uso Consentito
+          </h2>
           <p>L'utente si impegna a:</p>
-          <ul style={styles.list}>
+          <ul className="pl-6 my-2 space-y-1">
             <li>
               Utilizzare il servizio esclusivamente per consultazione personale
             </li>
@@ -90,8 +107,10 @@ export function TermsOfService() {
           </ul>
         </section>
 
-        <section style={styles.section}>
-          <h2 style={styles.h2}>6. Blocco per Abuso</h2>
+        <section className="mb-7 leading-[1.7] text-[15px] text-text-secondary">
+          <h2 className="text-lg font-semibold text-text-primary m-0 mb-3">
+            6. Blocco per Abuso
+          </h2>
           <p>
             Il titolare si riserva il diritto di bloccare l'accesso al servizio
             per gli utenti che ne facciano un uso improprio o abusivo, come
@@ -101,8 +120,10 @@ export function TermsOfService() {
           </p>
         </section>
 
-        <section style={styles.section}>
-          <h2 style={styles.h2}>7. Proprietà Intellettuale</h2>
+        <section className="mb-7 leading-[1.7] text-[15px] text-text-secondary">
+          <h2 className="text-lg font-semibold text-text-primary m-0 mb-3">
+            7. Proprietà Intellettuale
+          </h2>
           <p>
             Il codice sorgente di VendoCasa è di proprietà del suo autore. I
             dati OMI sono di proprietà dell'Agenzia delle Entrate e vengono
@@ -111,11 +132,13 @@ export function TermsOfService() {
           </p>
         </section>
 
-        <section style={styles.section}>
-          <h2 style={styles.h2}>8. Attribuzione Fonti Dati</h2>
+        <section className="mb-7 leading-[1.7] text-[15px] text-text-secondary">
+          <h2 className="text-lg font-semibold text-text-primary m-0 mb-3">
+            8. Attribuzione Fonti Dati
+          </h2>
           <p>
             I dati di valutazione immobiliare provengono dall'
-            <strong>
+            <strong className="text-text-primary">
               Osservatorio del Mercato Immobiliare (OMI) dell'Agenzia delle
               Entrate
             </strong>
@@ -127,8 +150,10 @@ export function TermsOfService() {
           </p>
         </section>
 
-        <section style={styles.section}>
-          <h2 style={styles.h2}>9. Modifiche ai Termini</h2>
+        <section className="mb-7 leading-[1.7] text-[15px] text-text-secondary">
+          <h2 className="text-lg font-semibold text-text-primary m-0 mb-3">
+            9. Modifiche ai Termini
+          </h2>
           <p>
             Il titolare si riserva il diritto di modificare i presenti termini
             in qualsiasi momento. Le modifiche saranno efficaci dal momento
@@ -138,8 +163,10 @@ export function TermsOfService() {
           </p>
         </section>
 
-        <section style={styles.section}>
-          <h2 style={styles.h2}>10. Legge Applicabile</h2>
+        <section className="mb-7 leading-[1.7] text-[15px] text-text-secondary">
+          <h2 className="text-lg font-semibold text-text-primary m-0 mb-3">
+            10. Legge Applicabile
+          </h2>
           <p>
             I presenti termini sono regolati dalla legge italiana. Per qualsiasi
             controversia è competente il foro del luogo di residenza del
@@ -147,12 +174,12 @@ export function TermsOfService() {
           </p>
         </section>
 
-        <div style={styles.footer}>
-          <Link to="/" style={styles.link}>
+        <div className="mt-10 pt-5 border-t border-border text-center text-sm text-text-tertiary">
+          <Link to="/" className="text-accent underline hover:text-accent-hover transition-colors">
             Torna a VendoCasa
           </Link>
           {" | "}
-          <Link to="/privacy" style={styles.link}>
+          <Link to="/privacy" className="text-accent underline hover:text-accent-hover transition-colors">
             Informativa Privacy
           </Link>
         </div>
@@ -160,67 +187,3 @@ export function TermsOfService() {
     </div>
   );
 }
-
-const styles = {
-  container: {
-    minHeight: "100vh",
-    backgroundColor: "#f7fafc",
-    padding: "40px 20px",
-    fontFamily:
-      '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-  } as React.CSSProperties,
-  content: {
-    maxWidth: "720px",
-    margin: "0 auto",
-    backgroundColor: "#fff",
-    borderRadius: "12px",
-    padding: "40px",
-    boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-  } as React.CSSProperties,
-  backLink: {
-    color: "#3182ce",
-    textDecoration: "none",
-    fontSize: "14px",
-    display: "inline-block",
-    marginBottom: "24px",
-  } as React.CSSProperties,
-  h1: {
-    fontSize: "28px",
-    fontWeight: 700,
-    color: "#1a202c",
-    margin: "0 0 8px 0",
-  } as React.CSSProperties,
-  lastUpdate: {
-    fontSize: "13px",
-    color: "#a0aec0",
-    margin: "0 0 32px 0",
-  } as React.CSSProperties,
-  section: {
-    marginBottom: "28px",
-    lineHeight: 1.7,
-    fontSize: "15px",
-    color: "#2d3748",
-  } as React.CSSProperties,
-  h2: {
-    fontSize: "18px",
-    fontWeight: 600,
-    color: "#2d3748",
-    margin: "0 0 12px 0",
-  } as React.CSSProperties,
-  list: {
-    paddingLeft: "24px",
-    margin: "8px 0",
-  } as React.CSSProperties,
-  link: {
-    color: "#3182ce",
-    textDecoration: "underline",
-  } as React.CSSProperties,
-  footer: {
-    marginTop: "40px",
-    paddingTop: "20px",
-    borderTop: "1px solid #e2e8f0",
-    textAlign: "center",
-    fontSize: "14px",
-    color: "#718096",
-  } as React.CSSProperties,
-};
