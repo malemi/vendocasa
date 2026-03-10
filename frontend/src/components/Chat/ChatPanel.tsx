@@ -34,10 +34,11 @@ const WELCOME_MESSAGE: ChatMessage = {
   role: "assistant",
   content:
     "Ciao! Sono il tuo consulente di valutazione immobiliare. " +
-    "Dimmi l'indirizzo dell'immobile che vuoi valutare e la superficie in m2, " +
-    "e ti daro una stima basata sui dati ufficiali OMI.\n\n" +
-    "Puoi anche allegare documenti catastali (visure, planimetrie) " +
-    "e li analizzo automaticamente. 🏠📄",
+    "Lavoro per te, non per un'agenzia.\n\n" +
+    "Dimmi l'indirizzo dell'immobile che vuoi valutare e ti guido " +
+    "passo passo nella stima, basata sui dati ufficiali OMI.\n\n" +
+    "Se hai documenti catastali (visure, planimetrie), puoi allegarli " +
+    "con la graffetta.",
 };
 
 export function ChatPanel({ onMapUpdate }: ChatPanelProps) {
