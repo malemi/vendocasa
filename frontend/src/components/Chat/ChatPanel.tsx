@@ -18,7 +18,8 @@ import {
 import { ChatMessageBubble } from "./ChatMessage";
 
 interface ChatPanelProps {
-  onMapUpdate: (coords: Coordinates) => void;
+  /** @deprecated Map removed from UI — kept for future use */
+  onMapUpdate?: (coords: Coordinates) => void;
 }
 
 let messageIdCounter = 0;
@@ -188,7 +189,7 @@ export function ChatPanel({ onMapUpdate }: ChatPanelProps) {
             );
           } else if (event.type === "map_update") {
             const coords = event.data as unknown as Coordinates;
-            onMapUpdate(coords);
+            onMapUpdate?.(coords);
           } else if (event.type === "error") {
             const errorMsg = (event.data as { message: string }).message;
             setMessages((prev) =>
