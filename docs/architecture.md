@@ -5,7 +5,7 @@
 ```
 +-------------------+     +------------------------+     +------------------+
 |  React Frontend   |---->|  FastAPI Backend        |---->|  PostgreSQL +    |
-|  (Vite + Leaflet) |     |  (Python 3.12+)        |     |  PostGIS         |
+|  (Vite + Tailwind)|     |  (Python 3.12+)        |     |  PostGIS         |
 |  on Vercel        |     |  on Railway             |     |  on Supabase     |
 +-------------------+     +-------+----------------+     +------------------+
                                   |
@@ -18,7 +18,7 @@
 ```
 
 Four services:
-1. **React frontend** (Vercel) -- chat interface + interactive Leaflet map with zone overlay
+1. **React frontend** (Vercel) -- dark-themed landing page + centered chat overlay (desktop: modal, mobile: fullscreen)
 2. **FastAPI backend** (Railway) -- REST API, geocoding, spatial queries, AI agent orchestration
 3. **PostgreSQL + PostGIS** (Supabase) -- OMI zones (polygons), quotations (price data), transactions
 4. **Anthropic Claude** (external API) -- conversational AI agent with programmatic tool calling
@@ -30,7 +30,8 @@ Four services:
 | **FastAPI** | Async, automatic OpenAPI docs, Pydantic validation, SSE streaming support |
 | **PostGIS** (not plain Postgres) | OMI zones are polygons; need `ST_Intersects` and `ST_DWithin` for spatial point-in-polygon queries. Plain Postgres cannot do this |
 | **Supabase** (not Railway Postgres) | Managed PostgreSQL with PostGIS enabled by default, free tier, connection pooling via Supavisor |
-| **React-Leaflet** (not Mapbox) | Free, no API key required, OpenStreetMap tiles, good enough for zone overlay display |
+| **Tailwind CSS v4** | Utility-first CSS with `@tailwindcss/vite` plugin, `@theme` directive for dark palette, zero custom CSS files |
+| **React-Leaflet** (not Mapbox) | Free, no API key required, OpenStreetMap tiles. Currently unused in the UI but available for future map features |
 | **SQLAlchemy + GeoAlchemy2** | Industry-standard async ORM with PostGIS geometry type support |
 | **Anthropic Claude Sonnet 4** | Programmatic tool calling for conversational valuation flow, SSE streaming |
 | **Nominatim** (primary geocoder) | Free, no API key, cacheable permanently under ODbL license |
@@ -124,7 +125,7 @@ CREATE INDEX idx_quot_type ON omi.quotations (property_type_code);
 
 ## AI Chat Agent
 
-The frontend presents a conversational chat interface instead of a form-based wizard. The backend orchestrates an AI agent that gathers property details through natural conversation and calls valuation tools programmatically.
+The frontend presents a conversational chat interface inside a centered overlay panel (desktop) or fullscreen sheet (mobile). The backend orchestrates an AI agent that gathers property details through natural conversation and calls valuation tools programmatically.
 
 ### Agent Architecture
 
@@ -146,7 +147,7 @@ Claude Sonnet 4 (with system prompt + 4 tools)
 SSE events streamed to frontend:
   - text_delta: token-by-token text
   - tool_result: structured valuation data (rendered as inline cards)
-  - map_update: coordinates for map flyTo
+  - map_update: coordinates (reserved for future map integration)
   - done: stream complete
 ```
 
@@ -256,15 +257,38 @@ vendocasa/
 |   +-- pyproject.toml
 +-- frontend/
 |   +-- src/
+|   |   +-- index.css              # Tailwind @import + @theme (dark palette)
+|   |   +-- main.tsx               # Entry point (imports index.css)
+|   |   +-- App.tsx                # Router + drawer state orchestrator
 |   |   +-- components/
+|   |   |   +-- ui/                # Design system primitives
+|   |   |   |   +-- Button.tsx     # Primary/secondary/ghost/danger variants
+|   |   |   |   +-- Logo.tsx       # VendoCasa wordmark SVG
+|   |   |   +-- Landing/           # Dark landing page sections
+|   |   |   |   +-- LandingPage.tsx
+|   |   |   |   +-- HeroSection.tsx
+|   |   |   |   +-- HowItWorks.tsx
+|   |   |   |   +-- FreakonomicsSection.tsx
+|   |   |   |   +-- TrustSection.tsx
+|   |   |   |   +-- CtaSection.tsx
+|   |   |   |   +-- Footer.tsx
+|   |   |   +-- AppDrawer/         # Centered overlay (desktop) / fullscreen (mobile)
+|   |   |   |   +-- AppDrawer.tsx  # Modal panel with CSS animations
+|   |   |   |   +-- DrawerHeader.tsx
 |   |   |   +-- Chat/              # AI chat interface
-|   |   |   |   +-- ChatPanel.tsx  # Main chat UI
-|   |   |   |   +-- ChatMessage.tsx # Message bubbles
-|   |   |   |   +-- InlineToolResult.tsx # Valuation cards
-|   |   |   +-- Map/               # Leaflet map + zone overlay
-|   |   |   +-- Layout/            # Sidebar + responsive layout
+|   |   |   |   +-- ChatPanel.tsx  # Main chat UI (messages + input + PDF upload)
+|   |   |   |   +-- ChatMessage.tsx # Message bubbles (dark theme)
+|   |   |   |   +-- InlineToolResult.tsx # Valuation cards in chat
+|   |   |   +-- Map/               # Leaflet map + zone overlay (not currently used)
+|   |   |   +-- Valuation/         # Property valuation UI
+|   |   |   |   +-- CoefficientWizard.tsx  # Main wizard (delegates to sub-components)
+|   |   |   |   +-- ConservationStep.tsx   # Conservation state selector
+|   |   |   |   +-- DetailsStep.tsx        # Property detail coefficient inputs
+|   |   |   |   +-- EnhancedResults.tsx    # Adjusted valuation results display
+|   |   |   +-- CookieBanner.tsx   # GDPR consent (gates drawer opening)
 |   |   +-- api/client.ts          # API client (axios + SSE streaming)
 |   |   +-- types/index.ts         # TypeScript types
+|   |   +-- pages/                 # Privacy policy, terms of service
 |   +-- package.json
 +-- railway.toml                   # Railway deployment config
 +-- vercel.json                    # Vercel deployment config

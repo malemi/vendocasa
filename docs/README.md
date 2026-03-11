@@ -24,10 +24,12 @@ Italian Real Estate Valuation Tool powered by OMI data, PostGIS spatial queries,
 
 ### For Users
 
-1. Open the app and type an address in the chat (e.g. "Via Sottocorno 17, Milano, 62mq")
-2. The AI agent asks about your property details conversationally
-3. View the valuation inline with zone map overlay
-4. Learn about agent incentive misalignment (Freakonomics)
+1. Open the landing page and click **"Valuta ora"**
+2. A chat overlay opens (centered modal on desktop, fullscreen on mobile)
+3. Type an address (e.g. "Via Sottocorno 17, Milano, 62mq")
+4. The AI agent asks about your property details conversationally
+5. View the valuation inline with correction coefficients
+6. Learn about agent incentive misalignment (Freakonomics)
 
 ### For Developers
 
@@ -46,7 +48,7 @@ Italian Real Estate Valuation Tool powered by OMI data, PostGIS spatial queries,
 
 ```
 Vercel                         Railway                        Supabase
-(React + Vite + Leaflet)  -->  (FastAPI + GDAL)          --> (PostgreSQL + PostGIS)
+(React + Vite + Tailwind)  --> (FastAPI + GDAL)          --> (PostgreSQL + PostGIS)
                                |                              |
                                +-- AI Chat Agent              +-- omi.zones (polygons)
                                |   (Claude Sonnet 4, SSE)     +-- omi.quotations (EUR/m2)
@@ -60,7 +62,7 @@ Vercel                         Railway                        Supabase
 
 | Component | Technology | Purpose |
 |-----------|-----------|---------|
-| Frontend | React, Vite, Leaflet, TypeScript | Chat UI + interactive zone map |
+| Frontend | React, Vite, Tailwind CSS v4, TypeScript | Dark landing page + centered chat overlay |
 | Backend | FastAPI, Python 3.12+, GDAL | REST API, geocoding, spatial queries, AI agent |
 | Database | PostgreSQL + PostGIS (Supabase) | Zone polygons, quotation prices, transactions |
 | AI Agent | Anthropic Claude Sonnet 4, SSE streaming | Conversational property valuation |
@@ -184,15 +186,21 @@ vendocasa/
 |   +-- pyproject.toml             # Dependencies
 +-- frontend/
 |   +-- src/
+|   |   +-- index.css              # Tailwind @import + @theme (dark palette)
+|   |   +-- App.tsx                # Router + drawer state orchestrator
 |   |   +-- components/
+|   |   |   +-- ui/                # Design system (Button, Logo)
+|   |   |   +-- Landing/           # Landing page sections (Hero, HowItWorks, etc.)
+|   |   |   +-- AppDrawer/         # Chat overlay (centered modal / fullscreen)
 |   |   |   +-- Chat/              # AI chat interface
-|   |   |   |   +-- ChatPanel.tsx  # Main chat UI (messages + input)
-|   |   |   |   +-- ChatMessage.tsx # Message bubbles
+|   |   |   |   +-- ChatPanel.tsx  # Messages + input + PDF upload
+|   |   |   |   +-- ChatMessage.tsx # Message bubbles (dark theme)
 |   |   |   |   +-- InlineToolResult.tsx # Valuation cards in chat
-|   |   |   +-- Map/               # Leaflet map with zone overlay
-|   |   |   +-- Layout/            # Sidebar + responsive layout
+|   |   |   +-- Valuation/         # Coefficient wizard (decomposed)
+|   |   |   +-- Map/               # Leaflet map (not currently used in UI)
 |   |   +-- api/client.ts          # API client (axios + SSE streaming)
 |   |   +-- types/index.ts         # TypeScript types
+|   |   +-- pages/                 # Privacy, terms of service
 |   +-- package.json
 +-- railway.toml                   # Railway deployment config
 +-- vercel.json                    # Vercel deployment config
