@@ -7,9 +7,9 @@ interface FreakonomicsSectionProps {
 
 export function FreakonomicsSection({ onOpenApp }: FreakonomicsSectionProps) {
   const [salePrice, setSalePrice] = useState(250000);
-  const [overPrice, setOverPrice] = useState(30000);
 
   const underPrice = 20000;
+  const overPrice = 30000;
   const correctPrice = salePrice;
   const tooLow = salePrice - underPrice;
   const tooHigh = salePrice + overPrice;
