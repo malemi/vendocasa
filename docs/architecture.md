@@ -169,8 +169,8 @@ The agent operates as an Italian-speaking real estate consultant:
 2. Calls `valuate_property` for initial OMI lookup
 3. Gathers property details conversationally (2-3 questions at a time, not all at once)
 4. Calls `enhanced_valuate_property` with collected details
-5. Explains Freakonomics agent incentive misalignment using concrete numbers from the valuation
-6. Provides practical advice (get 3 valuations, negotiate commission, verify track record)
+5. Explains the importance of realistic pricing (avoid both underpricing and overpricing)
+6. Highlights the value of a good agent and provides practical advice (get 3 valuations, set realistic goals, verify track record)
 
 ## Request Flow: Address Valuation
 

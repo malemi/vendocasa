@@ -146,53 +146,55 @@ degradata (-5%)
 
 ## Cosa spiegare al proprietario
 
-### Il problema degli incentivi delle agenzie immobiliari
-Lo studio di Steven Levitt e Stephen Dubner (Freakonomics) ha dimostrato che \
-gli agenti immobiliari, quando vendono la PROPRIA casa, la tengono sul mercato \
-10 giorni in piu e ottengono un prezzo del 3-10% superiore rispetto a quando \
-vendono la casa di un cliente.
+### L'importanza di conoscere il valore reale
+Prima di mettere in vendita, e fondamentale conoscere il valore reale del \
+proprio immobile. I dati OMI dell'Agenzia delle Entrate forniscono range di \
+prezzo aggiornati per ogni micro-zona d'Italia. Partire informati significa \
+poter dialogare con qualsiasi professionista da una posizione di consapevolezza.
 
-**La matematica concreta dell'incentivo sbagliato:**
-A un'agenzia conviene vendere a sconto, perche l'incasso per ora lavorata \
-aumenta drasticamente. Un trilocale a Milano venduto sotto mercato si vende \
-dopo 2-3 visite — poche ore di lavoro per ~20.000 EUR di commissione. \
-E' un ottimo affare PER L'AGENZIA.
+### Due errori da evitare: sottovalutare e sopravvalutare
+**Non svendere:** chi vende senza conoscere il valore reale rischia di \
+accettare offerte al ribasso. Su una casa da 300.000 EUR, vendere a 250.000 EUR \
+per chiudere in fretta significa perdere 50.000 EUR.
 
-Se invece l'agenzia punta al prezzo corretto (o superiore), ci vuole \
-molto piu tempo: cinque volte le ore per ottenere il 50% in piu di \
-commissione. La matematica non torna per loro. Per il proprietario si': \
-quelle settimane in piu valgono decine di migliaia di euro.
+**Non sopravvalutare:** un prezzo gonfiato tiene la casa mesi sul mercato. \
+L'effetto "prime 2 settimane" e reale: gli immobili prezzati correttamente \
+fin dall'inizio ottengono il 94% del prezzo richiesto. Quelli sovraprezzati \
+che restano mesi sul mercato scendono al 90% — meno di quanto si sarebbe \
+ottenuto partendo dal prezzo giusto.
 
-**La distorsione nella pratica:**
-Su una casa da 300.000 EUR con commissione del 3%, vendere a 250.000 EUR \
-invece di 300.000 EUR costa all'agente solo 1.500 EUR di commissione persa. \
-Ma te ne fa perdere 50.000. Il tuo interesse e il loro non sono allineati.
+Il prezzo corretto non e ne il piu alto ne il piu basso: e quello supportato \
+dai dati e che permette una vendita in tempi ragionevoli, al giusto valore.
 
-### Come le agenzie sottovalutano
-- Usano spesso lo stato "NORMALE" come base, anche per immobili ristrutturati
-- Non applicano i coefficienti correttivi positivi
-- Una valutazione bassa attira piu acquirenti e velocizza la vendita
-- Ti convincono che "il mercato e fermo" o "gli acquirenti non arrivano" \
-per farti abbassare il prezzo, quando in realta' il problema e la loro \
-strategia di pricing
+### Dove un buon agente immobiliare fa la differenza
+Un agente immobiliare competente e un professionista che porta valore reale:
+- **Presentazione dell'immobile**: sa quali lavori conviene fare prima della \
+vendita, come valorizzare gli spazi, quali difetti correggere
+- **Home staging**: piccoli investimenti (500-2.000 EUR) che rendono 5-10x. \
+Una mano di vernice, foto professionali, arredi strategici
+- **Negoziazione professionale**: un agente esperto ottiene il 5-10% in piu. \
+Spesso il costo della commissione si ripaga da solo
+- **Qualificazione acquirenti**: filtra i perditempo, verifica la \
+pre-approvazione del mutuo, riduce il rischio di trattative che saltano
+- **Rete di contatti qualificati**: sa quali acquirenti cercano esattamente \
+il tuo tipo di immobile
+- **Strategia di prezzo**: conosce il mercato locale, sa quale prezzo attira \
+le offerte giuste e quale le allontana
 
-### Come proteggersi: il mandato con prezzo minimo
-La soluzione e semplice ma richiede fermezza: fissa dall'inizio un **prezzo \
-minimo al di sotto del quale non venderai**, e inseriscilo nel contratto con \
-una clausola di uscita senza penali se l'agenzia non riesce a raggiungerlo.
+Un buon professionista merita di essere pagato equamente per il suo lavoro. \
+L'obiettivo e trovare il giusto equilibrio: compenso proporzionato al valore \
+creato, tempi ragionevoli, risultato che soddisfi tutti.
 
-L'agenzia cercera' di convincerti che e' troppo alto. Ascolta le argomentazioni, \
-confrontale con i dati OMI che hai, e tieni la posizione se la tua stima e' \
-fondata. Un'agenzia che si rifiuta di mettere per iscritto l'impegno a vendere \
-a un prezzo minimo ha gia' risposto alla domanda piu' importante.
-
-### Dove un buon agente aggiunge valore
-Nonostante gli incentivi disallineati, un buon agente puo:
-- Negoziare professionalmente (5-10% in piu)
-- Qualificare gli acquirenti (filtro perditempo, verifica pre-approvazione mutuo)
-- Consigliare home staging (investimento 500-2.000 EUR, resa 5-10x)
-- Usare la sua rete di contatti qualificati
-- Impostare una strategia di prezzo corretta (l'effetto "prime 2 settimane")
+### Come collaborare con un agente
+- **Condividi i dati**: presenta la tua ricerca OMI. Un buon agente apprezzera' \
+un cliente informato e vi confronterete sui numeri
+- **Ottieni almeno 3 valutazioni**: diffida sia della piu' bassa che della piu' \
+alta. La valutazione giusta e' quella documentata con dati reali
+- **Concordate obiettivi realistici**: prezzo obiettivo, tempi di vendita, \
+strategia di marketing. Quando venditore e agente condividono aspettative \
+realistiche, il risultato e' migliore per tutti
+- **Verifica il track record**: quante vendite nella tua zona? Rapporto prezzo \
+richiesto / prezzo finale? Un buon agente e' sopra il 95%
 
 ## Documentazione necessaria per la vendita
 Quando il proprietario si prepara a vendere, deve raccogliere una serie di \

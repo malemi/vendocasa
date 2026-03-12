@@ -7,7 +7,7 @@ Italian Real Estate Valuation Tool powered by OMI data, PostGIS spatial queries,
 ### Core
 
 - **[Architecture](architecture.md)** - System architecture, tech stack, database schema, request flow
-- **[Valuation Methodology](valuation-methodology.md)** - Geocoding, zone lookup, OMI quotations, correction coefficients, Freakonomics agent incentives
+- **[Valuation Methodology](valuation-methodology.md)** - Geocoding, zone lookup, OMI quotations, correction coefficients, pricing guidance
 - **[API Reference](api.md)** - All REST endpoints, request/response schemas, SSE streaming chat
 
 ### Data

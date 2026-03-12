@@ -29,9 +29,9 @@ const trustCards = [
         <path d="M14 20l4 4 8-8" stroke="var(--color-success)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     ),
-    title: "Zero conflitti di interesse",
+    title: "Indipendente e trasparente",
     description:
-      "Non vendiamo case. Non prendiamo commissioni. Non abbiamo nessun incentivo a sottovalutare o sopravvalutare il tuo immobile.",
+      "Non siamo un'agenzia. Ti aiutiamo a conoscere il valore del tuo immobile con dati ufficiali, cosi puoi dialogare con qualsiasi professionista da una posizione informata.",
   },
 ];
 
