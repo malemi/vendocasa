@@ -68,7 +68,7 @@ async def chat(
                     f"Massimo {MAX_FILES_PER_MESSAGE} documenti per messaggio.",
                 )
 
-            # Multi-block content: documents first, then text
+            # Multi-block content: documents/images first, then text
             content_blocks: list[dict] = []
             for doc_id in m.document_ids:
                 doc = get_document(doc_id)
@@ -77,16 +77,28 @@ async def chat(
                         400,
                         f"Documento {doc_id} non trovato o scaduto. Ricaricalo.",
                     )
-                content_blocks.append({
-                    "type": "document",
-                    "source": {
-                        "type": "base64",
-                        "media_type": doc.media_type,
-                        "data": base64.standard_b64encode(doc.data).decode("ascii"),
-                    },
-                })
+                b64_data = base64.standard_b64encode(doc.data).decode("ascii")
+                if doc.is_image:
+                    content_blocks.append({
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": doc.media_type,
+                            "data": b64_data,
+                        },
+                    })
+                else:
+                    content_blocks.append({
+                        "type": "document",
+                        "source": {
+                            "type": "base64",
+                            "media_type": doc.media_type,
+                            "data": b64_data,
+                        },
+                    })
                 logger.info(
-                    "Resolved document %s (%s, %d bytes) for user_id=%s",
+                    "Resolved %s %s (%s, %d bytes) for user_id=%s",
+                    "image" if doc.is_image else "document",
                     doc.doc_id, doc.filename, doc.size, user_id,
                 )
 

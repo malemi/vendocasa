@@ -1,4 +1,4 @@
-"""Document upload endpoint for chat PDF attachments."""
+"""Document upload endpoint for chat attachments (PDF + images)."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from app.services.document_store import (
     ALLOWED_MEDIA_TYPES,
+    IMAGE_MEDIA_TYPES,
     MAX_FILE_SIZE,
     store_document,
 )
@@ -26,18 +27,19 @@ class UploadResponse(BaseModel):
 
 @router.post("/api/documents/upload", response_model=UploadResponse)
 async def upload_document(file: UploadFile) -> UploadResponse:
-    """Upload a PDF document for use in chat. Returns a document ID.
+    """Upload a PDF or image for use in chat. Returns a document ID.
 
     Constraints:
-      - PDF only (application/pdf)
+      - PDF (application/pdf) or images (JPEG, PNG, WEBP, GIF)
       - Max 5 MB
       - Stored in memory for 30 minutes
     """
     # Validate content type
     if file.content_type not in ALLOWED_MEDIA_TYPES:
+        allowed = ", ".join(sorted(ALLOWED_MEDIA_TYPES))
         raise HTTPException(
             status_code=400,
-            detail=f"Tipo file non supportato: {file.content_type}. Solo PDF.",
+            detail=f"Tipo file non supportato: {file.content_type}. Formati accettati: PDF, JPEG, PNG, WEBP, GIF.",
         )
 
     # Read and validate size
@@ -48,20 +50,28 @@ async def upload_document(file: UploadFile) -> UploadResponse:
             detail=f"File troppo grande ({len(data)} bytes). Massimo {MAX_FILE_SIZE // (1024 * 1024)} MB.",
         )
 
-    # Additional PDF magic bytes check
-    if not data[:5] == b"%PDF-":
-        raise HTTPException(
-            status_code=400,
-            detail="Il file non sembra essere un PDF valido.",
-        )
+    # Validate file content based on type
+    if file.content_type == "application/pdf":
+        if not data[:5] == b"%PDF-":
+            raise HTTPException(
+                status_code=400,
+                detail="Il file non sembra essere un PDF valido.",
+            )
+    elif file.content_type in IMAGE_MEDIA_TYPES:
+        # Basic image validation: check minimum size
+        if len(data) < 100:
+            raise HTTPException(
+                status_code=400,
+                detail="Il file immagine sembra vuoto o corrotto.",
+            )
 
     doc = store_document(
-        filename=file.filename or "document.pdf",
+        filename=file.filename or "file",
         media_type=file.content_type,
         data=data,
     )
     logger.info(
-        "Document uploaded: %s (%s, %d bytes)", doc.doc_id, doc.filename, doc.size
+        "Document uploaded: %s (%s, %s, %d bytes)", doc.doc_id, doc.filename, doc.media_type, doc.size
     )
 
     return UploadResponse(
