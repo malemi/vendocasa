@@ -13,7 +13,8 @@ from dataclasses import dataclass, field
 
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
 MAX_FILES_PER_MESSAGE = 4
-ALLOWED_MEDIA_TYPES = {"application/pdf"}
+ALLOWED_MEDIA_TYPES = {"application/pdf", "image/jpeg", "image/png", "image/webp", "image/gif"}
+IMAGE_MEDIA_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 TTL_SECONDS = 30 * 60  # 30 minutes
 
 
@@ -22,9 +23,13 @@ class StoredDocument:
     doc_id: str
     filename: str
     media_type: str
-    data: bytes  # raw PDF bytes
+    data: bytes  # raw PDF or image bytes
     size: int
     created_at: float = field(default_factory=time.time)
+
+    @property
+    def is_image(self) -> bool:
+        return self.media_type in IMAGE_MEDIA_TYPES
 
     @property
     def is_expired(self) -> bool:

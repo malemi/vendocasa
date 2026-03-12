@@ -1,5 +1,5 @@
 /**
- * Main chat panel: message list + input bar with PDF upload.
+ * Main chat panel: message list + input bar with PDF/image upload.
  * Fills the sidebar and streams responses from the AI agent.
  */
 
@@ -30,6 +30,9 @@ function nextId(): string {
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 const MAX_FILES = 4;
 
+const ACCEPTED_FILE_TYPES = "application/pdf,image/jpeg,image/png,image/webp,image/gif";
+const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+
 const WELCOME_MESSAGE: ChatMessage = {
   id: "welcome",
   role: "assistant",
@@ -38,8 +41,8 @@ const WELCOME_MESSAGE: ChatMessage = {
     "Lavoro per te, non per un'agenzia.\n\n" +
     "Dimmi l'indirizzo dell'immobile che vuoi valutare e ti guido " +
     "passo passo nella stima, basata sui dati ufficiali OMI.\n\n" +
-    "Se hai documenti catastali (visure, planimetrie), puoi allegarli " +
-    "con la graffetta.",
+    "Puoi allegare documenti catastali (visure, planimetrie) o " +
+    "foto dell'immobile con la graffetta.",
 };
 
 export function ChatPanel({ onMapUpdate }: ChatPanelProps) {
@@ -82,8 +85,9 @@ export function ChatPanel({ onMapUpdate }: ChatPanelProps) {
       setIsUploading(true);
       try {
         for (const file of Array.from(files)) {
-          if (file.type !== "application/pdf") {
-            alert(`"${file.name}" non e un PDF. Solo file PDF sono supportati.`);
+          const isAllowed = file.type === "application/pdf" || IMAGE_TYPES.has(file.type);
+          if (!isAllowed) {
+            alert(`"${file.name}" non e supportato. Formati accettati: PDF, JPEG, PNG, WEBP, GIF.`);
             continue;
           }
           if (file.size > MAX_FILE_SIZE) {
@@ -130,7 +134,7 @@ export function ChatPanel({ onMapUpdate }: ChatPanelProps) {
     const userMsg: ChatMessage = {
       id: nextId(),
       role: "user",
-      content: trimmed || (pendingDocs.length > 0 ? "Analizza questi documenti." : ""),
+      content: trimmed || (pendingDocs.length > 0 ? "Analizza questi file." : ""),
       documents: pendingDocs.length > 0 ? [...pendingDocs] : undefined,
     };
 
@@ -272,7 +276,7 @@ export function ChatPanel({ onMapUpdate }: ChatPanelProps) {
       >
         {isDragOver && (
           <div className="absolute inset-2 flex items-center justify-center bg-accent-muted/20 border-2 border-dashed border-accent rounded-xl text-sm text-accent font-semibold z-10 pointer-events-none">
-            Trascina qui i tuoi PDF
+            Trascina qui PDF o foto
           </div>
         )}
         {messages.map((msg) => (
@@ -287,7 +291,7 @@ export function ChatPanel({ onMapUpdate }: ChatPanelProps) {
         <input
           ref={fileInputRef}
           type="file"
-          accept="application/pdf"
+          accept={ACCEPTED_FILE_TYPES}
           multiple
           className="hidden"
           onChange={(e) => handleFileSelect(e.target.files)}
@@ -304,7 +308,7 @@ export function ChatPanel({ onMapUpdate }: ChatPanelProps) {
             ${isAttachDisabled ? "opacity-40 cursor-not-allowed" : ""}
           `}
           disabled={isAttachDisabled}
-          title="Allega PDF"
+          title="Allega PDF o foto"
         >
           {isUploading ? "..." : "\uD83D\uDCCE"}
         </button>
@@ -319,7 +323,7 @@ export function ChatPanel({ onMapUpdate }: ChatPanelProps) {
                   key={doc.docId}
                   className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-accent-muted text-accent text-xs font-semibold border border-accent/30"
                 >
-                  📄 {doc.filename}
+                  {doc.mediaType.startsWith("image/") ? "📷" : "📄"} {doc.filename}
                   <button
                     onClick={() =>
                       setPendingDocs((prev) =>

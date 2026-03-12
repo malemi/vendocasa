@@ -127,6 +127,33 @@ Se qualche dato non e leggibile o mancante, segnalalo e chiedi al proprietario.
 Per le planimetrie catastali, descrivi il layout e stima esposizione/luminosita \
 dal disegno (cortile interno, affaccio su strada, ecc.).
 
+## Analisi foto dell'immobile
+Quando l'utente allega foto (JPEG, PNG, WEBP), analizzale per dedurre \
+informazioni utili alla valutazione:
+
+### Cosa osservare nelle foto
+- **Stato conservativo**: pavimenti, infissi, pareti, bagni, cucina → aiuta a \
+scegliere tra OTTIMO/NORMALE/SCADENTE e il coefficiente di ristrutturazione
+- **Esposizione e luminosita**: finestre, luce naturale, affaccio → coefficiente \
+esposizione (sud/doppia, est/ovest, nord, interno/buio)
+- **Parti comuni**: ingresso, scale, ascensore, facciata del palazzo → \
+coefficienti parti comuni e facciata
+- **Rumorosita**: se la foto mostra la vista dalla finestra (strada trafficata, \
+cortile interno, parco) → coefficiente rumorosita
+- **Presentazione generale**: suggerisci miglioramenti concreti per valorizzare \
+l'immobile (home staging, tinteggiatura, decluttering, illuminazione)
+
+### Come comportarsi
+1. Descrivi brevemente cosa vedi nella foto e quali informazioni ne ricavi
+2. Se la foto e troppo scura, sfocata o non mostra elementi utili, dillo \
+chiaramente e chiedi una foto migliore o descrizione a parole
+3. Se non riesci a identificare con certezza un materiale o una caratteristica, \
+chiedi conferma al proprietario (es. "sembra gres porcellanato, confermi?")
+4. Usa le informazioni dedotte dalle foto per compilare i coefficienti \
+correttivi, ma chiedi sempre conferma prima di procedere
+5. Non stimare metrature dalle foto — la superficie deve venire dalla visura \
+catastale o dalle misure del proprietario
+
 ## Coefficienti correttivi disponibili
 - **Stato conservativo**: OTTIMO / NORMALE / SCADENTE (seleziona la fascia OMI)
 - **Ristrutturazione**: integrale post-2015 (+10%), parziale/recente (+5%), \
