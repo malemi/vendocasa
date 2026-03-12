@@ -161,21 +161,32 @@ The EUR/m2 from comparables may fall inside or outside the OMI range. Significan
 - The OMI range needs updating (there is always a lag)
 - The cadastral data doesn't reflect actual usable surface
 
-## Real Estate Agent Incentives
+## Selling at the Right Price
 
-Based on research by Levitt & Syvester (popularized in *Freakonomics*), real estate agents face a misalignment of incentives:
+The tool educates users about two symmetrical pricing errors:
 
-1. **The marginal incentive problem**: On a 500,000 EUR sale at 3% commission, an extra 10,000 EUR in sale price earns the agent only 300 EUR more. But it might require weeks of additional marketing and showing.
+1. **Underpricing**: Selling below market value leaves money on the table. On a 300,000 EUR property, a 50,000 EUR discount closes the sale faster but costs the seller significantly.
 
-2. **Own vs. client property**: When agents sell their OWN homes, they keep them on market 10 days longer and get 10% more than when selling clients' homes.
+2. **Overpricing**: An inflated price keeps the property on the market for months. The "first 2 weeks effect" is well-documented: correctly priced properties sell at 94% of asking price, while overpriced ones that linger drop to 90% — less than what a correct initial price would have achieved.
 
-3. **Volume over value**: An agent who closes 10 deals at conservative prices earns more total commission than one who closes 5 deals at optimal prices.
+The correct price is neither the highest nor the lowest: it's the one supported by data that enables a sale within reasonable timeframes at fair value.
 
-The tool educates users about these dynamics so they can:
-- Recognize when a valuation is suspiciously low
-- Ask agents to justify their valuation with specific comparable transactions
-- Understand where a good agent truly adds value (market knowledge, negotiation, buyer qualification)
-- Negotiate commission terms effectively
+## The Value of a Good Real Estate Agent
+
+A competent real estate agent is a professional who adds real value:
+- **Property presentation**: knows which improvements to make, how to stage spaces, which defects to fix
+- **Home staging**: small investments (500-2,000 EUR) that return 5-10x
+- **Professional negotiation**: skilled agents achieve 5-10% premiums — often the commission pays for itself
+- **Buyer qualification**: filters time-wasters, verifies mortgage pre-approval, reduces risk of deals falling through
+- **Pricing strategy**: knows the local market and what price attracts the right offers
+
+A good professional deserves fair compensation for their work. The goal is finding the right balance: compensation proportional to value created, reasonable timelines, and a result that satisfies everyone — buyers, sellers, and agents alike.
+
+The tool helps users:
+- Know the real value of their property before listing (OMI data + correction coefficients)
+- Engage with agents from an informed position, not a blind one
+- Set realistic objectives together with their chosen professional
+- Compare at least 3 valuations and ask for comparable transactions as support
 
 ## Important Caveats
 
