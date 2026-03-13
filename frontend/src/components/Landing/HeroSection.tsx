@@ -35,8 +35,9 @@ export function HeroSection({ onOpenApp }: HeroSectionProps) {
         </h1>
 
         <p className="text-lg md:text-xl text-text-secondary max-w-2xl mx-auto mb-10 leading-relaxed">
-          Scoprilo in 2 minuti. Con i dati ufficiali OMI,
-          non con le stime di un'agenzia che guadagna dalla tua fretta.
+          Scoprilo in 2 minuti. Usiamo i dati dell'Osservatorio del Mercato
+          Immobiliare dell'Agenzia delle Entrate: range di prezzo ufficiali
+          aggiornati ogni semestre su oltre 8.000 micro-zone italiane.
         </p>
 
         <div className="flex flex-col items-center gap-4">
