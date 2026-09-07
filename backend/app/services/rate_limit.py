@@ -173,25 +173,29 @@ class RateLimiter:
 def get_client_ip(request: Request) -> str:
     """Return the client address from a value the caller cannot forge.
 
-    `X-Forwarded-For` is a comma-separated list the caller can prepend
-    arbitrary entries to; an appending proxy (Railway's Envoy edge included)
-    puts the hop it actually observed at the END of the header and leaves
-    everything to its left as whatever the client sent. Trusting the
-    LEFTMOST entry -- the previous version of this function -- lets any
-    caller pick its own rate-limit identity by sending a fake leftmost
-    address and no cookie.
+    Invariant: we only trust values the caller cannot have written under an
+    appending proxy. `X-Forwarded-For` is a comma-separated list the caller
+    can prepend arbitrary entries to; an appending proxy (Railway's Envoy
+    edge included) puts the hop it actually observed at the END of the
+    header and leaves everything to its left as whatever the client sent.
+    Trusting the LEFTMOST entry lets any caller pick its own rate-limit
+    identity by sending a fake leftmost address and no cookie.
+
+    `X-Envoy-External-Address` is deliberately NOT in this chain: its safety
+    depends on an unproven assumption that only a trusted edge can set it,
+    and a forged one alone reopens the bypass whenever XFF is absent from a
+    request that reaches this process directly. The rightmost XFF hop needs
+    no such assumption -- under any appending proxy it is written by the
+    last hop, not the caller -- and Vendocasa has no CDN in front of
+    Railway, so there is no multi-proxy scenario where it would degrade to
+    a shared proxy IP.
 
     Preference order:
-      1. `X-Envoy-External-Address` -- Railway's edge proxy sets this from
-         the actual TCP connection; it is not attacker-writable.
-      2. The RIGHTMOST `X-Forwarded-For` entry -- the last hop appended by
+      1. The RIGHTMOST `X-Forwarded-For` entry -- the last hop appended by
          a trusted proxy, correct regardless of how many hops preceded it.
-      3. `request.client.host` -- no proxy in front (local development).
+      2. `request.client.host` -- no proxy in front (local development, or
+         a request that reached this process directly).
     """
-    envoy_address = request.headers.get("x-envoy-external-address")
-    if envoy_address and envoy_address.strip():
-        return envoy_address.strip()
-
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
         hops = [hop.strip() for hop in forwarded.split(",") if hop.strip()]

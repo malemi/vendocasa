@@ -101,12 +101,25 @@ class FakeRequest:
         self.client = _Client()
 
 
-def test_get_client_ip_prefers_envoy_header_over_forwarded_for():
+def test_get_client_ip_ignores_x_envoy_external_address_entirely():
+    """X-Envoy-External-Address is not in the trust chain: its safety would
+    rest on an unproven assumption about Railway's edge, and a forged one
+    alone reopens the bypass whenever XFF is absent. The rightmost XFF hop
+    wins even when an Envoy header is also present.
+    """
     req = FakeRequest({
         "x-envoy-external-address": "198.51.100.9",
-        "x-forwarded-for": "1.2.3.4, 10.0.0.2, 10.0.0.3",
+        "x-forwarded-for": "1.2.3.4, 10.0.0.2, 203.0.113.55",
     })
-    assert get_client_ip(req) == "198.51.100.9"
+    assert get_client_ip(req) == "203.0.113.55"
+
+
+def test_get_client_ip_ignores_envoy_header_when_xff_absent():
+    """With no X-Forwarded-For, a forged Envoy header must not be trusted
+    either -- fall back to request.client.host, not the header value.
+    """
+    req = FakeRequest({"x-envoy-external-address": "198.51.100.9"}, client_host="10.0.0.1")
+    assert get_client_ip(req) == "10.0.0.1"
 
 
 def test_get_client_ip_ignores_caller_supplied_leftmost_hop():
@@ -147,6 +160,58 @@ def test_rotating_leftmost_xff_with_no_cookie_still_gets_limited(client, fake_an
             "/api/chat",
             json=CHAT_BODY,
             headers={"x-forwarded-for": f"10.10.10.{i}, {real_rightmost_ip}"},
+        )
+        statuses.append(response.status_code)
+
+    assert statuses[:5] == [200] * 5
+    assert statuses[5] == 429
+
+
+def test_forged_envoy_header_with_xff_present_still_gets_limited(client, fake_anthropic, monkeypatch):
+    """A forged, rotated X-Envoy-External-Address must not override the
+    rightmost XFF hop -- the header carries no trust at all, with or
+    without XFF alongside it.
+    """
+    fake_anthropic()
+    monkeypatch.setattr(settings, "rate_limit_per_minute", 5)
+    monkeypatch.setattr(settings, "rate_limit_per_day", 1000)
+    monkeypatch.setattr(settings, "rate_limit_global_daily_model_calls", 1000)
+
+    real_rightmost_ip = "203.0.113.99"
+    statuses = []
+    for i in range(6):
+        client.cookies.clear()
+        response = client.post(
+            "/api/chat",
+            json=CHAT_BODY,
+            headers={
+                "x-forwarded-for": f"10.10.10.{i}, {real_rightmost_ip}",
+                "x-envoy-external-address": f"198.51.100.{i}",  # rotated, forged
+            },
+        )
+        statuses.append(response.status_code)
+
+    assert statuses[:5] == [200] * 5
+    assert statuses[5] == 429
+
+
+def test_forged_envoy_header_without_xff_does_not_bypass(client, fake_anthropic, monkeypatch):
+    """With XFF absent, a rotated forged Envoy header must not mint a new
+    identity per request either: the header is never trusted, so every
+    request falls back to request.client.host (constant for TestClient).
+    """
+    fake_anthropic()
+    monkeypatch.setattr(settings, "rate_limit_per_minute", 5)
+    monkeypatch.setattr(settings, "rate_limit_per_day", 1000)
+    monkeypatch.setattr(settings, "rate_limit_global_daily_model_calls", 1000)
+
+    statuses = []
+    for i in range(6):
+        client.cookies.clear()
+        response = client.post(
+            "/api/chat",
+            json=CHAT_BODY,
+            headers={"x-envoy-external-address": f"198.51.100.{i}"},  # rotated, forged, no XFF
         )
         statuses.append(response.status_code)
 
