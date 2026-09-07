@@ -149,17 +149,33 @@ class RateLimiter:
 
 
 def get_client_ip(request: Request) -> str:
-    """Return the client IP, preferring the leftmost X-Forwarded-For hop.
+    """Return the client address from a value the caller cannot forge.
 
-    Railway terminates TLS at a proxy, so `request.client.host` is the
-    proxy's address, not the caller's. The leftmost X-Forwarded-For entry
-    is the original client as seen by the first hop.
+    `X-Forwarded-For` is a comma-separated list the caller can prepend
+    arbitrary entries to; an appending proxy (Railway's Envoy edge included)
+    puts the hop it actually observed at the END of the header and leaves
+    everything to its left as whatever the client sent. Trusting the
+    LEFTMOST entry -- the previous version of this function -- lets any
+    caller pick its own rate-limit identity by sending a fake leftmost
+    address and no cookie.
+
+    Preference order:
+      1. `X-Envoy-External-Address` -- Railway's edge proxy sets this from
+         the actual TCP connection; it is not attacker-writable.
+      2. The RIGHTMOST `X-Forwarded-For` entry -- the last hop appended by
+         a trusted proxy, correct regardless of how many hops preceded it.
+      3. `request.client.host` -- no proxy in front (local development).
     """
+    envoy_address = request.headers.get("x-envoy-external-address")
+    if envoy_address and envoy_address.strip():
+        return envoy_address.strip()
+
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
-        first_hop = forwarded.split(",")[0].strip()
-        if first_hop:
-            return first_hop
+        hops = [hop.strip() for hop in forwarded.split(",") if hop.strip()]
+        if hops:
+            return hops[-1]
+
     return request.client.host if request.client else "unknown"
 
 

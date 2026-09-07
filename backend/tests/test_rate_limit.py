@@ -68,18 +68,64 @@ def test_ip_fallback_survives_cookie_deletion():
     assert decisions[-1].retry_after_seconds > 0
 
 
-def test_get_client_ip_prefers_leftmost_x_forwarded_for():
-    class FakeRequest:
-        def __init__(self, headers, client_host="10.0.0.1"):
-            self.headers = headers
+class FakeRequest:
+    def __init__(self, headers, client_host="10.0.0.1"):
+        self.headers = headers
 
-            class _Client:
-                host = client_host
+        class _Client:
+            host = client_host
 
-            self.client = _Client()
+        self.client = _Client()
 
-    req = FakeRequest({"x-forwarded-for": "198.51.100.5, 10.0.0.2, 10.0.0.3"})
-    assert get_client_ip(req) == "198.51.100.5"
 
-    req_no_header = FakeRequest({})
-    assert get_client_ip(req_no_header) == "10.0.0.1"
+def test_get_client_ip_prefers_envoy_header_over_forwarded_for():
+    req = FakeRequest({
+        "x-envoy-external-address": "198.51.100.9",
+        "x-forwarded-for": "1.2.3.4, 10.0.0.2, 10.0.0.3",
+    })
+    assert get_client_ip(req) == "198.51.100.9"
+
+
+def test_get_client_ip_ignores_caller_supplied_leftmost_hop():
+    """The leftmost X-Forwarded-For entry is whatever the caller typed --
+    it must never be trusted. Only the rightmost (proxy-appended) entry is.
+    """
+    req = FakeRequest({"x-forwarded-for": "9.9.9.9, 10.0.0.2, 203.0.113.7"})
+    assert get_client_ip(req) == "203.0.113.7"
+
+    # A caller sending a completely different fake leftmost value each time
+    # must still resolve to the same (real, rightmost) address.
+    req2 = FakeRequest({"x-forwarded-for": "1.1.1.1, 10.0.0.2, 203.0.113.7"})
+    assert get_client_ip(req2) == get_client_ip(req) == "203.0.113.7"
+
+
+def test_get_client_ip_falls_back_to_request_client_host():
+    req = FakeRequest({})
+    assert get_client_ip(req) == "10.0.0.1"
+
+
+def test_rotating_leftmost_xff_with_no_cookie_still_gets_limited(client, fake_anthropic, monkeypatch):
+    """Reproduces the exploit from the integration review: a caller with no
+    vendocasa_uid cookie (fresh uuid4 identity every request) that rotates
+    the leftmost X-Forwarded-For entry must still be blocked, because the
+    real identity comes from the rightmost (proxy-appended) hop, which the
+    caller does not control.
+    """
+    fake_anthropic()
+    monkeypatch.setattr(settings, "rate_limit_per_minute", 5)
+    monkeypatch.setattr(settings, "rate_limit_per_day", 1000)
+    monkeypatch.setattr(settings, "rate_limit_global_daily_model_calls", 1000)
+
+    real_rightmost_ip = "203.0.113.42"
+    statuses = []
+    for i in range(6):
+        client.cookies.clear()  # no vendocasa_uid cookie -> fresh uuid4 identity
+        response = client.post(
+            "/api/chat",
+            json=CHAT_BODY,
+            headers={"x-forwarded-for": f"10.10.10.{i}, {real_rightmost_ip}"},
+        )
+        statuses.append(response.status_code)
+
+    assert statuses[:5] == [200] * 5
+    assert statuses[5] == 429
