@@ -73,6 +73,42 @@ class FakeAsyncAnthropic:
         return self
 
 
+class FakeMessagesRaising:
+    """A `.messages` whose `.stream(...)` always raises, for testing that the
+    agent loop never forwards raw exception text to the client.
+    """
+
+    def __init__(self, exc: Exception):
+        self._exc = exc
+
+    def stream(self, **kwargs):
+        raise self._exc
+
+
+class FakeAsyncAnthropicRaising:
+    def __init__(self, exc: Exception):
+        self.init_kwargs: dict = {}
+        self.messages = FakeMessagesRaising(exc)
+
+    def __call__(self, **kwargs):
+        self.init_kwargs = kwargs
+        return self
+
+
+def make_raising_anthropic_factory(exc: Exception):
+    """Return a monkeypatch replacement for AsyncAnthropic whose first API
+    call raises `exc` -- simulates an Anthropic SDK/HTTP error mid-request.
+    """
+    instance = FakeAsyncAnthropicRaising(exc)
+
+    def _factory(**kwargs):
+        instance.init_kwargs = kwargs
+        return instance
+
+    _factory.instance = instance
+    return _factory
+
+
 def make_fake_anthropic_factory(responses: list[FakeResponse]):
     """Return a callable usable as a monkeypatch replacement for AsyncAnthropic.
 

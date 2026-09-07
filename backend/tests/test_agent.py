@@ -6,7 +6,12 @@ import pytest
 
 from app.config import settings
 from app.services.agent import run_agent_stream
-from tests.fakes import FakeResponse, FakeToolUseBlock, make_fake_anthropic_factory
+from tests.fakes import (
+    FakeResponse,
+    FakeToolUseBlock,
+    make_fake_anthropic_factory,
+    make_raising_anthropic_factory,
+)
 
 
 async def _collect(generator):
@@ -64,6 +69,23 @@ async def test_model_id_is_server_config_only(monkeypatch):
     await _collect(run_agent_stream(messages, db=None))
 
     assert factory.instance.messages.calls[0]["model"] == "claude-sonnet-test-pin"
+
+
+@pytest.mark.asyncio
+async def test_sse_error_event_never_forwards_raw_exception_text(monkeypatch):
+    """The SSE error event must not leak provider error detail (status codes,
+    rate-limit info, request internals) to an anonymous caller.
+    """
+    secret_looking_message = "401 Unauthorized: invalid x-api-key sk-ant-secret-abc123"
+    factory = make_raising_anthropic_factory(RuntimeError(secret_looking_message))
+    monkeypatch.setattr("app.services.agent.AsyncAnthropic", factory)
+
+    events = await _collect(run_agent_stream([{"role": "user", "content": "Ciao"}], db=None))
+
+    error_events = [e for e in events if e.startswith("event: error")]
+    assert len(error_events) == 1
+    assert secret_looking_message not in error_events[0]
+    assert "temporarily unavailable" in error_events[0]
 
 
 @pytest.mark.asyncio
