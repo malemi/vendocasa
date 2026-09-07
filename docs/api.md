@@ -65,6 +65,7 @@ data: {}
 
 **Errors:**
 - `400` -- conversation history or a single message exceeds the configured cap
+- `400` -- total attachment bytes across the request exceed `AGENT_MAX_ATTACHMENT_BYTES`
 - `429` -- per-identity rate limit exceeded (per-minute or per-day). Body:
   `{"detail": {"error": "rate_limited", "message": "..."}}`, with a
   `Retry-After` header giving the number of seconds to wait
@@ -310,6 +311,6 @@ All errors follow the format:
 Common error codes:
 - `404` -- resource not found (address, zone, transaction)
 - `422` -- validation error (invalid parameters)
-- `429` -- rate limit exceeded on `/api/chat` (`detail.error: "rate_limited"`, `Retry-After` header)
+- `429` -- rate limit exceeded on `/api/chat` or `/api/documents/upload` (`detail.error: "rate_limited"`, `Retry-After` header) -- both share the same per-identity budget
 - `500` -- internal server error
 - `503` -- `/api/chat` global daily model-call ceiling reached (`detail.error: "service_unavailable"`)
