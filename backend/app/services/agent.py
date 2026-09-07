@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.services.coefficients import get_coefficient_options
+from app.services.rate_limit import rate_limiter
 from app.services.valuation import (
     enhanced_valuate_address,
     get_comparables,
@@ -601,15 +602,26 @@ async def run_agent_stream(
     # messages are appended). We work on a copy so the caller's list is untouched.
     api_messages = list(messages)
 
-    max_tool_rounds = 5  # safety limit to prevent infinite loops
+    max_tool_rounds = settings.agent_max_tool_rounds  # bounds worst-case cost per request
 
     for _round in range(max_tool_rounds):
+        # Global circuit breaker: each round is one real Anthropic API call.
+        # The door-level check in the /api/chat endpoint (rate_limiter.peek_global_model_calls)
+        # rejects new requests once the service has already exhausted its daily
+        # ceiling; this per-round check additionally stops a single request's
+        # own tool-calling loop from pushing the service over the ceiling.
+        call_decision = rate_limiter.record_model_call()
+        if not call_decision.allowed:
+            logger.warning("Global daily model-call ceiling reached mid-request")
+            yield f"event: done\ndata: {{}}\n\n"
+            return
+
         # Stream Claude's response
         try:
             response = None
             async with client.messages.stream(
                 model="claude-sonnet-4-20250514",
-                max_tokens=4096,
+                max_tokens=settings.agent_max_tokens,
                 system=SYSTEM_PROMPT,
                 tools=TOOLS,
                 messages=api_messages,
@@ -623,9 +635,14 @@ async def run_agent_stream(
 
                 response = await stream.get_final_message()
 
-        except Exception as exc:
+        except Exception:
+            # Never forward provider error detail (status, rate-limit info) to an
+            # anonymous caller -- log it server-side and send a generic message.
             logger.exception("Anthropic API error")
-            yield f"event: error\ndata: {_serialize({'message': str(exc)})}\n\n"
+            yield (
+                f"event: error\n"
+                f"data: {_serialize({'message': 'The AI assistant is temporarily unavailable. Please try again later.'})}\n\n"
+            )
             return
 
         # Check if Claude wants to call tools

@@ -81,6 +81,21 @@ async def chat(
             detail="AI agent not configured. Set ANTHROPIC_API_KEY in .env",
         )
 
+    # Bound the worst-case cost of a single request: cap how much conversation
+    # history a client can make the backend re-send to Claude on every
+    # tool-calling round (see agent.py's max_tool_rounds loop).
+    if len(body.messages) > settings.agent_max_history_messages:
+        raise HTTPException(
+            400,
+            f"Conversazione troppo lunga (massimo {settings.agent_max_history_messages} messaggi).",
+        )
+    for m in body.messages:
+        if len(m.content) > settings.agent_max_message_chars:
+            raise HTTPException(
+                400,
+                f"Messaggio troppo lungo (massimo {settings.agent_max_message_chars} caratteri).",
+            )
+
     # Build Claude API messages, resolving document_ids to content blocks
     api_messages: list[dict] = []
     for m in body.messages:

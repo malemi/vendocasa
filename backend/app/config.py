@@ -14,6 +14,12 @@ class Settings(BaseSettings):
     rate_limit_per_day: int = 50
     rate_limit_global_daily_model_calls: int = 2000
 
+    # Bounded cost per chat request (backend/app/services/agent.py).
+    agent_max_tool_rounds: int = 3
+    agent_max_history_messages: int = 20
+    agent_max_message_chars: int = 4000
+    agent_max_tokens: int = 4096
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
