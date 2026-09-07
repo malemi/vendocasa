@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import time
 
+from starlette.datastructures import Headers
+
 from app.config import settings
 from app.services.rate_limit import InMemoryRateLimitStore, RateLimiter, get_client_ip
 
@@ -93,7 +95,10 @@ def test_store_sweeps_expired_windows(monkeypatch):
 
 class FakeRequest:
     def __init__(self, headers, client_host="10.0.0.1"):
-        self.headers = headers
+        # Real Starlette Headers, so the fake carries the same API the code
+        # uses (get AND getlist) and duplicate header lines behave as on the
+        # wire. Accepts the tests' plain dicts unchanged.
+        self.headers = Headers(headers=headers)
 
         class _Client:
             host = client_host

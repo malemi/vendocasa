@@ -196,7 +196,10 @@ def get_client_ip(request: Request) -> str:
       2. `request.client.host` -- no proxy in front (local development, or
          a request that reached this process directly).
     """
-    forwarded = request.headers.get("x-forwarded-for")
+    # getlist, not get: with duplicate X-Forwarded-For header LINES, get()
+    # returns only the first line -- which is the caller's under an appending
+    # proxy. Joining all lines keeps the rightmost hop rightmost.
+    forwarded = ",".join(request.headers.getlist("x-forwarded-for"))
     if forwarded:
         hops = [hop.strip() for hop in forwarded.split(",") if hop.strip()]
         if hops:
