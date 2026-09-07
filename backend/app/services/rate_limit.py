@@ -72,20 +72,42 @@ class InMemoryRateLimitStore(RateLimitStore):
     concern at this traffic volume.
     """
 
+    # Sweep expired windows every this many `hit` calls. Attacker-chosen
+    # identities (a fresh uid per cookie-less request) are otherwise a slow
+    # memory leak: nothing ever deletes an entry once its window has passed.
+    _SWEEP_EVERY = 500
+
     def __init__(self) -> None:
         self._lock = Lock()
-        # key -> (window_start_epoch_seconds, count)
-        self._windows: dict[str, tuple[float, int]] = {}
+        # key -> (window_start_epoch_seconds, count, window_seconds)
+        # window_seconds is stored per-entry so a sweep can tell whether any
+        # given key has expired without the caller having to pass it in.
+        self._windows: dict[str, tuple[float, int, int]] = {}
+        self._hits_since_sweep = 0
+
+    def _sweep_expired_locked(self, now: float) -> None:
+        expired = [
+            key
+            for key, (window_start, _count, window_seconds) in self._windows.items()
+            if now - window_start >= window_seconds
+        ]
+        for key in expired:
+            del self._windows[key]
 
     def hit(self, key: str, window_seconds: int, limit: int) -> tuple[bool, int]:
         now = time.time()
         with self._lock:
-            window_start, count = self._windows.get(key, (now, 0))
+            self._hits_since_sweep += 1
+            if self._hits_since_sweep >= self._SWEEP_EVERY:
+                self._sweep_expired_locked(now)
+                self._hits_since_sweep = 0
+
+            window_start, count, _ = self._windows.get(key, (now, 0, window_seconds))
             elapsed = now - window_start
             if elapsed >= window_seconds:
                 window_start, count, elapsed = now, 0, 0.0
             count += 1
-            self._windows[key] = (window_start, count)
+            self._windows[key] = (window_start, count, window_seconds)
             if count > limit:
                 retry_after = max(1, int(window_seconds - elapsed))
                 return False, retry_after
@@ -94,7 +116,7 @@ class InMemoryRateLimitStore(RateLimitStore):
     def peek(self, key: str, window_seconds: int, limit: int) -> bool:
         now = time.time()
         with self._lock:
-            window_start, count = self._windows.get(key, (now, 0))
+            window_start, count, _ = self._windows.get(key, (now, 0, window_seconds))
             if now - window_start >= window_seconds:
                 return True
             return count < limit

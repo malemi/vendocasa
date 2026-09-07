@@ -65,6 +65,12 @@ The backend runs as a single uvicorn worker (no `--workers` flag in
 depend on this -- adding worker processes or horizontal replicas would need
 a shared store for both, not just a config change.
 
+Both the rate limiter and the document store keep their state in process
+memory only. A redeploy, a crash, or Railway's `on_failure` restart policy
+resets every counter, including the global daily model-call ceiling and
+every per-identity budget -- this is a known, accepted limitation of the
+single-worker, no-external-store design, not a bug to fix separately.
+
 ### Chat Agent Configuration
 
 Environment variables for `/api/chat` (`backend/app/config.py`). All are

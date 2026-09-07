@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 from app.config import settings
 from app.services.rate_limit import InMemoryRateLimitStore, RateLimiter, get_client_ip
 
@@ -66,6 +68,27 @@ def test_ip_fallback_survives_cookie_deletion():
 
     assert [d.allowed for d in decisions] == [True, True, False]
     assert decisions[-1].retry_after_seconds > 0
+
+
+def test_store_sweeps_expired_windows(monkeypatch):
+    """Attacker-chosen identities (a fresh uid per cookie-less request) grow
+    the store forever unless expired windows are swept -- verify `hit`
+    actually purges them instead of leaking memory indefinitely.
+    """
+    store = InMemoryRateLimitStore()
+    monkeypatch.setattr(InMemoryRateLimitStore, "_SWEEP_EVERY", 2)
+
+    long_expired = time.time() - 1_000_000
+    store._windows["stale-1"] = (long_expired, 5, 60)
+    store._windows["stale-2"] = (long_expired, 5, 60)
+    assert len(store._windows) == 2
+
+    # _SWEEP_EVERY=2: the second hit below triggers a sweep.
+    store.hit("fresh-1", 60, 100)
+    store.hit("fresh-2", 60, 100)
+
+    assert "stale-1" not in store._windows
+    assert "stale-2" not in store._windows
 
 
 class FakeRequest:
