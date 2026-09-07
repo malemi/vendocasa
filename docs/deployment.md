@@ -89,10 +89,12 @@ optional except `ANTHROPIC_API_KEY`; defaults apply otherwise.
 | `AGENT_MAX_TOKENS` | `4096` | Max output tokens per Anthropic API call |
 | `AGENT_MAX_HISTORY_MESSAGES` | `20` | Maximum number of messages a client may send in one chat request |
 | `AGENT_MAX_MESSAGE_CHARS` | `4000` | Maximum character length of a single message's `content` |
+| `AGENT_MAX_ATTACHMENT_BYTES` | `15728640` (15 MB) | Total bytes of PDF/image attachments a single chat request may carry, summed across every message. `AGENT_MAX_MESSAGE_CHARS` bounds `content` text only -- without this, a request could still attach `AGENT_MAX_HISTORY_MESSAGES` x 4 files x 5 MB and re-bill that near the model's context window on every tool-calling round |
 
 Exceeding a per-identity rate limit returns `429` with a `Retry-After`
-header; exceeding the global ceiling returns `503`; exceeding a history or
-message-length cap returns `400`. See `docs/api.md` for the exact response
+header; exceeding the global ceiling returns `503`; exceeding a history,
+message-length, or attachment-size cap returns `400`. See `docs/api.md` for
+the exact response
 shapes.
 
 ### Configuration
@@ -216,5 +218,22 @@ The script is idempotent: already-imported semesters are skipped via UNIQUE cons
 | Supabase | Free (500 MB, 2 semesters) | $0/month |
 | Railway | Hobby | ~$5/month |
 | Vercel | Hobby | $0/month |
-| Anthropic | Pay-as-you-go | ~$0.01-0.05 per chat conversation |
-| **Total** | | **~$5/month** |
+| Anthropic | Pay-as-you-go | see below |
+| **Total** | | **~$5/month** infra, plus usage-bound Anthropic spend |
+
+**Anthropic spend is not a fixed per-conversation number** -- it is bounded
+by the caps in the Chat Agent Configuration table above, not by typical
+usage. Worst case, at Sonnet pricing ($3/$15 per MTok):
+
+- **Per request:** a plain-text conversation against the caps above costs
+  roughly **$0.50** (~106k input + ~12k output tokens across
+  `AGENT_MAX_TOOL_ROUNDS` re-billed rounds). A request whose attachments are
+  dense enough to fill the model's context window costs roughly **$2**
+  (~200k-token context re-billed over up to 3 rounds) -- `AGENT_MAX_ATTACHMENT_BYTES`
+  (15 MB total per request) keeps ordinary use (a handful of scanned
+  documents) far below this, but does not mathematically rule it out, since
+  token cost depends on image/PDF content density, not raw byte count.
+- **Per day, service-wide:** `RATE_LIMIT_GLOBAL_DAILY_MODEL_CALLS` (default
+  2000) is the real backstop once a caller defeats the per-identity limits --
+  roughly **$330/day** if every call is text-only, up to roughly **$1,300/day**
+  if every call is filled to the context window with attachments.

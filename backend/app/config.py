@@ -35,6 +35,12 @@ class Settings(BaseSettings):
     agent_max_history_messages: int = 20
     agent_max_message_chars: int = 4000
     agent_max_tokens: int = 4096
+    # Total bytes of PDF/image attachments a single chat request may carry,
+    # summed across every message and document_id (backend/app/api/chat.py).
+    # AGENT_MAX_MESSAGE_CHARS bounds text only; without this, a request can
+    # still attach AGENT_MAX_HISTORY_MESSAGES x 4 files x 5 MB and re-bill
+    # that near the model's context window on every tool-calling round.
+    agent_max_attachment_bytes: int = 15 * 1024 * 1024  # 15 MB
 
     @property
     def cors_origin_list(self) -> list[str]:

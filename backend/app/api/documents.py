@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException, UploadFile
+from fastapi import APIRouter, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
 from app.services.document_store import (
@@ -13,6 +13,7 @@ from app.services.document_store import (
     MAX_FILE_SIZE,
     store_document,
 )
+from app.services.rate_limit import get_client_ip, rate_limiter
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -26,14 +27,30 @@ class UploadResponse(BaseModel):
 
 
 @router.post("/api/documents/upload", response_model=UploadResponse)
-async def upload_document(file: UploadFile) -> UploadResponse:
+async def upload_document(file: UploadFile, request: Request) -> UploadResponse:
     """Upload a PDF or image for use in chat. Returns a document ID.
 
     Constraints:
       - PDF (application/pdf) or images (JPEG, PNG, WEBP, GIF)
       - Max 5 MB
       - Stored in memory for 30 minutes
+
+    Public and unauthenticated, same as /api/chat -- shares its per-identity
+    rate-limit budget so it can't be used to exhaust document_store's memory
+    (no total-size cap, only opportunistic TTL cleanup) outside that budget.
     """
+    user_id = getattr(request.state, "user_id", "unknown")
+    decision = rate_limiter.check_identity(user_id, get_client_ip(request))
+    if not decision.allowed:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": "rate_limited",
+                "message": "Too many requests. Please wait before trying again.",
+            },
+            headers={"Retry-After": str(decision.retry_after_seconds)},
+        )
+
     # Validate content type
     if file.content_type not in ALLOWED_MEDIA_TYPES:
         allowed = ", ".join(sorted(ALLOWED_MEDIA_TYPES))

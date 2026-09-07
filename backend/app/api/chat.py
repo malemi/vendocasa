@@ -93,8 +93,14 @@ async def chat(
                 f"Messaggio troppo lungo (massimo {settings.agent_max_message_chars} caratteri).",
             )
 
-    # Build Claude API messages, resolving document_ids to content blocks
+    # Build Claude API messages, resolving document_ids to content blocks.
+    # AGENT_MAX_MESSAGE_CHARS above bounds text only -- a message can still
+    # carry MAX_FILES_PER_MESSAGE attachments, and the client can send up to
+    # agent_max_history_messages such messages, so track a running total of
+    # attachment bytes across the WHOLE request and cut it off before that
+    # dwarfs the text-only cost bound (see agent_max_attachment_bytes).
     api_messages: list[dict] = []
+    total_attachment_bytes = 0
     for m in body.messages:
         if m.document_ids and m.role == "user":
             if len(m.document_ids) > MAX_FILES_PER_MESSAGE:
@@ -111,6 +117,13 @@ async def chat(
                     raise HTTPException(
                         400,
                         f"Documento {doc_id} non trovato o scaduto. Ricaricalo.",
+                    )
+                total_attachment_bytes += doc.size
+                if total_attachment_bytes > settings.agent_max_attachment_bytes:
+                    raise HTTPException(
+                        400,
+                        "Allegati troppo grandi (massimo "
+                        f"{settings.agent_max_attachment_bytes // (1024 * 1024)} MB totali per conversazione).",
                     )
                 b64_data = base64.standard_b64encode(doc.data).decode("ascii")
                 if doc.is_image:
