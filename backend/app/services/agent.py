@@ -619,7 +619,7 @@ async def run_agent_stream(
         call_decision = rate_limiter.record_model_call()
         if not call_decision.allowed:
             logger.warning("Global daily model-call ceiling reached mid-request")
-            yield f"event: done\ndata: {{}}\n\n"
+            yield "event: done\ndata: {}\n\n"
             return
 
         # Stream Claude's response
@@ -656,7 +656,7 @@ async def run_agent_stream(
 
         if not tool_use_blocks:
             # No tools — we're done
-            yield f"event: done\ndata: {{}}\n\n"
+            yield "event: done\ndata: {}\n\n"
             return
 
         # Append assistant message with tool_use content blocks
@@ -699,4 +699,4 @@ async def run_agent_stream(
         # Loop continues — Claude will process tool results and respond
 
     # If we hit the safety limit, end gracefully
-    yield f"event: done\ndata: {{}}\n\n"
+    yield "event: done\ndata: {}\n\n"
