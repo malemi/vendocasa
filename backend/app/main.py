@@ -1,10 +1,36 @@
+import logging
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
-from app.config import settings
+from app.config import DEFAULT_ANTHROPIC_BASE_URL, settings
+
+logger = logging.getLogger(__name__)
+
+# Fail loudly at startup rather than per-request: a missing key means the
+# chat agent would otherwise return a 503 on every single /api/chat call
+# instead of the deployment failing once, clearly, before it takes traffic.
+if not settings.anthropic_api_key:
+    raise RuntimeError(
+        "ANTHROPIC_API_KEY is not set. Refusing to start -- the chat agent "
+        "cannot function without it."
+    )
+
+logger.info(
+    "Anthropic configured: model=%s api_key_present=%s base_url=%s",
+    settings.anthropic_model,
+    bool(settings.anthropic_api_key),
+    settings.anthropic_base_url,
+)
+if settings.anthropic_base_url != DEFAULT_ANTHROPIC_BASE_URL:
+    logger.warning(
+        "ANTHROPIC_BASE_URL is overridden to %s -- every Anthropic request, "
+        "including the API key, is being sent there instead of the default "
+        "Anthropic host.",
+        settings.anthropic_base_url,
+    )
 
 app = FastAPI(
     title="VendoCasa - Italian Real Estate Valuation",

@@ -596,7 +596,13 @@ async def run_agent_stream(
       done        - {}  stream complete
       error       - {"message": "..."}  error occurred
     """
-    client = AsyncAnthropic(api_key=settings.anthropic_api_key)
+    # base_url is passed explicitly so an ambient ANTHROPIC_BASE_URL
+    # environment variable can never redirect the request (and the
+    # x-api-key header with it) to a host this application did not choose.
+    client = AsyncAnthropic(
+        api_key=settings.anthropic_api_key,
+        base_url=settings.anthropic_base_url,
+    )
 
     # The messages list is mutated during the tool loop (assistant + tool_result
     # messages are appended). We work on a copy so the caller's list is untouched.
@@ -620,7 +626,7 @@ async def run_agent_stream(
         try:
             response = None
             async with client.messages.stream(
-                model="claude-sonnet-4-20250514",
+                model=settings.anthropic_model,
                 max_tokens=settings.agent_max_tokens,
                 system=SYSTEM_PROMPT,
                 tools=TOOLS,

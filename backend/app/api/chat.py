@@ -75,11 +75,8 @@ async def chat(
             },
         )
 
-    if not settings.anthropic_api_key:
-        raise HTTPException(
-            status_code=503,
-            detail="AI agent not configured. Set ANTHROPIC_API_KEY in .env",
-        )
+    # ANTHROPIC_API_KEY presence is enforced at startup (app/main.py) --
+    # this process would not be serving traffic if it were missing.
 
     # Bound the worst-case cost of a single request: cap how much conversation
     # history a client can make the backend re-send to Claude on every
