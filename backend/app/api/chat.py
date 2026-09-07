@@ -14,6 +14,7 @@ from app.config import settings
 from app.database import get_db
 from app.services.agent import run_agent_stream
 from app.services.document_store import MAX_FILES_PER_MESSAGE, get_document
+from app.services.rate_limit import get_client_ip, rate_limiter
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +51,29 @@ async def chat(
       error       - error occurred
     """
     user_id = getattr(request.state, "user_id", "unknown")
-    logger.info("Chat request from user_id=%s (%d messages)", user_id, len(body.messages))
+    client_ip = get_client_ip(request)
+    logger.info("Chat request from user_id=%s ip=%s (%d messages)", user_id, client_ip, len(body.messages))
+
+    identity_decision = rate_limiter.check_identity(user_id, client_ip)
+    if not identity_decision.allowed:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": "rate_limited",
+                "message": "Too many requests. Please wait before trying again.",
+            },
+            headers={"Retry-After": str(identity_decision.retry_after_seconds)},
+        )
+
+    global_decision = rate_limiter.peek_global_model_calls()
+    if not global_decision.allowed:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "service_unavailable",
+                "message": "The AI assistant is temporarily unavailable. Please try again later.",
+            },
+        )
 
     if not settings.anthropic_api_key:
         raise HTTPException(
