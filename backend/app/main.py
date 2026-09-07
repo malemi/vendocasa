@@ -32,10 +32,20 @@ if settings.anthropic_base_url != DEFAULT_ANTHROPIC_BASE_URL:
         settings.anthropic_base_url,
     )
 
+# /docs, /redoc, and /openapi.json publish exactly which routes exist --
+# including which ones spend money on the paid Anthropic model -- to
+# anyone who requests them. Disabled unless ENABLE_API_DOCS is set.
+_docs_kwargs = (
+    {}
+    if settings.enable_api_docs
+    else {"docs_url": None, "redoc_url": None, "openapi_url": None}
+)
+
 app = FastAPI(
     title="VendoCasa - Italian Real Estate Valuation",
     description="Personal tool for OMI-based property valuation across Italian cities",
     version="0.1.0",
+    **_docs_kwargs,
 )
 
 app.add_middleware(
