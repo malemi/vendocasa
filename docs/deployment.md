@@ -56,9 +56,38 @@ The import script auto-detects semesters from the CSV filenames inside each zip.
 | Variable | Value |
 |----------|-------|
 | `DATABASE_URL` | Supabase connection string (with `postgresql+psycopg://` prefix) |
-| `ANTHROPIC_API_KEY` | Your Anthropic API key |
+| `ANTHROPIC_API_KEY` | Your Anthropic API key. Required -- the backend refuses to start without it (see Chat Agent Configuration below) |
 | `CORS_ORIGINS` | Your Vercel frontend URL (e.g. `https://vendocasa.vercel.app`) |
 | `GOOGLE_GEOCODING_API_KEY` | Optional Google Maps fallback geocoder |
+
+The backend runs as a single uvicorn worker (no `--workers` flag in
+`backend/Dockerfile`). The in-process rate limiter and document store both
+depend on this -- adding worker processes or horizontal replicas would need
+a shared store for both, not just a config change.
+
+### Chat Agent Configuration
+
+Environment variables for `/api/chat` (`backend/app/config.py`). All are
+optional except `ANTHROPIC_API_KEY`; defaults apply otherwise.
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `ANTHROPIC_API_KEY` | *(required)* | Anthropic API key. The backend logs the configured model and whether a key is present at startup, and refuses to start if it is missing -- never the key itself, or any part of it |
+| `ANTHROPIC_MODEL` | `claude-sonnet-4-20250514` | Model id sent to Anthropic. Server-side configuration only; nothing in a chat request can influence it |
+| `ANTHROPIC_BASE_URL` | `https://api.anthropic.com` | Anthropic API host, passed explicitly to the SDK client so an ambient `ANTHROPIC_BASE_URL` process environment variable can never redirect requests (and the API key with them) elsewhere. A non-default value is logged loudly at startup |
+| `ENABLE_API_DOCS` | `false` | Serves `/docs`, `/redoc`, and `/openapi.json` when `true`. Off by default -- these publish the full route list, including which endpoints spend money on the paid model |
+| `RATE_LIMIT_PER_MINUTE` | `5` | Requests per minute, per identity (the `vendocasa_uid` cookie AND the client IP, checked independently) |
+| `RATE_LIMIT_PER_DAY` | `50` | Requests per day, per identity |
+| `RATE_LIMIT_GLOBAL_DAILY_MODEL_CALLS` | `2000` | Anthropic model calls per day, service-wide -- a circuit breaker independent of per-identity limits |
+| `AGENT_MAX_TOOL_ROUNDS` | `3` | Maximum tool-calling rounds per chat request before the agent stops and replies with what it has |
+| `AGENT_MAX_TOKENS` | `4096` | Max output tokens per Anthropic API call |
+| `AGENT_MAX_HISTORY_MESSAGES` | `20` | Maximum number of messages a client may send in one chat request |
+| `AGENT_MAX_MESSAGE_CHARS` | `4000` | Maximum character length of a single message's `content` |
+
+Exceeding a per-identity rate limit returns `429` with a `Retry-After`
+header; exceeding the global ceiling returns `503`; exceeding a history or
+message-length cap returns `400`. See `docs/api.md` for the exact response
+shapes.
 
 ### Configuration
 

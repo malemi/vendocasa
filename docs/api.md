@@ -24,7 +24,12 @@ AI conversational agent via Server-Sent Events (SSE). The backend orchestrates C
 }
 ```
 
-Messages follow the standard `role`/`content` format. Send the full conversation history with each request (the backend is stateless).
+Messages follow the standard `role`/`content` format. Send the full conversation history with each request (the backend is stateless). The history is capped at `AGENT_MAX_HISTORY_MESSAGES` messages (default 20) of up to `AGENT_MAX_MESSAGE_CHARS` characters each (default 4000); a request exceeding either returns `400`.
+
+The endpoint is rate-limited per identity (the `vendocasa_uid` cookie and
+the client IP, checked independently) and by a global daily ceiling on
+Anthropic model calls -- see **Errors** below and `docs/deployment.md` for
+the environment variables and defaults.
 
 **Response:** `text/event-stream` (SSE)
 
@@ -59,7 +64,15 @@ data: {}
 | `error` | `{"message": "..."}` | Error occurred |
 
 **Errors:**
-- `503` -- AI agent not configured (missing `ANTHROPIC_API_KEY`)
+- `400` -- conversation history or a single message exceeds the configured cap
+- `429` -- per-identity rate limit exceeded (per-minute or per-day). Body:
+  `{"detail": {"error": "rate_limited", "message": "..."}}`, with a
+  `Retry-After` header giving the number of seconds to wait
+- `503` -- the service-wide daily model-call ceiling has been reached. Body:
+  `{"detail": {"error": "service_unavailable", "message": "..."}}`
+
+A missing `ANTHROPIC_API_KEY` is a startup failure, not a per-request
+error -- the backend does not accept traffic without one configured.
 
 ---
 
@@ -297,4 +310,6 @@ All errors follow the format:
 Common error codes:
 - `404` -- resource not found (address, zone, transaction)
 - `422` -- validation error (invalid parameters)
+- `429` -- rate limit exceeded on `/api/chat` (`detail.error: "rate_limited"`, `Retry-After` header)
 - `500` -- internal server error
+- `503` -- `/api/chat` global daily model-call ceiling reached (`detail.error: "service_unavailable"`)
