@@ -9,6 +9,7 @@ router = APIRouter()
 
 
 @router.post("/api/transactions")
+# TODO: add response_model when a matching output schema is defined
 async def create_transaction(
     data: TransactionCreate,
     db: AsyncSession = Depends(get_db),
@@ -34,6 +35,7 @@ async def create_transaction(
 
 
 @router.get("/api/transactions")
+# TODO: add response_model when a matching output schema is defined
 async def list_transactions(
     link_zona: str | None = Query(None),
     municipality: str | None = Query(None),
@@ -67,6 +69,7 @@ async def list_transactions(
 
 
 @router.put("/api/transactions/{transaction_id}")
+# TODO: add response_model when a matching output schema is defined
 async def update_transaction(
     transaction_id: int,
     data: TransactionUpdate,
@@ -92,6 +95,7 @@ async def update_transaction(
 
 
 @router.delete("/api/transactions/{transaction_id}")
+# TODO: add response_model when a matching output schema is defined
 async def delete_transaction(
     transaction_id: int,
     db: AsyncSession = Depends(get_db),

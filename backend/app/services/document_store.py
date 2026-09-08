@@ -1,8 +1,14 @@
-"""In-memory temporary document storage with TTL expiration.
+"""
+In-memory document store for uploaded files (PDF, images).
 
-Uploaded PDFs are stored here briefly so the chat endpoint can resolve
-document_ids into Claude API content blocks. Documents expire after
-TTL_SECONDS and are cleaned up on the next store call.
+IMPORTANT: This store uses a module-level dict that does NOT survive process
+restarts. On platforms with multiple workers or auto-scaling (e.g., Railway
+with >1 worker), documents uploaded by one worker are invisible to others.
+Currently safe because Railway runs a single worker, but this is a latent
+limitation.
+
+For production use, consider Redis-backed or filesystem-backed storage.
+Documents expire after 30 minutes (STORE_TTL_SECONDS).
 """
 
 from __future__ import annotations

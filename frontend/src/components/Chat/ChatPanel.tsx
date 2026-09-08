@@ -3,11 +3,10 @@
  * Fills the sidebar and streams responses from the AI agent.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useId } from "react";
 import type {
   ChatMessage,
   ChatToolResult,
-  Coordinates,
   UploadedDocument,
 } from "../../types";
 import {
@@ -18,13 +17,7 @@ import {
 import { ChatMessageBubble } from "./ChatMessage";
 
 interface ChatPanelProps {
-  /** @deprecated Map removed from UI — kept for future use */
-  onMapUpdate?: (coords: Coordinates) => void;
-}
-
-let messageIdCounter = 0;
-function nextId(): string {
-  return `msg-${++messageIdCounter}`;
+  // no props currently needed – component manages its own state
 }
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
@@ -45,7 +38,9 @@ const WELCOME_MESSAGE: ChatMessage = {
     "foto dell'immobile con la graffetta.",
 };
 
-export function ChatPanel({ onMapUpdate }: ChatPanelProps) {
+export function ChatPanel(_props: ChatPanelProps) {
+  const reactId = useId();
+  const nextId = () => `msg-${reactId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   const [messages, setMessages] = useState<ChatMessage[]>([WELCOME_MESSAGE]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
@@ -191,9 +186,6 @@ export function ChatPanel({ onMapUpdate }: ChatPanelProps) {
                   : m
               )
             );
-          } else if (event.type === "map_update") {
-            const coords = event.data as unknown as Coordinates;
-            onMapUpdate?.(coords);
           } else if (event.type === "error") {
             const errorMsg = (event.data as { message: string }).message;
             setMessages((prev) =>
@@ -243,7 +235,7 @@ export function ChatPanel({ onMapUpdate }: ChatPanelProps) {
       );
       abortControllerRef.current = null;
     }
-  }, [input, isStreaming, messages, onMapUpdate, pendingDocs]);
+  }, [input, isStreaming, messages, pendingDocs]);
 
   const handleStop = useCallback(() => {
     abortControllerRef.current?.abort();

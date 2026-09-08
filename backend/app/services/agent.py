@@ -592,7 +592,6 @@ async def run_agent_stream(
     Event types:
       text_delta  - {"text": "..."}  streamed text tokens
       tool_result - {"tool": "...", "result": {...}}  structured data for inline cards
-      map_update  - {"lat": float, "lng": float}  map flyTo coordinates
       done        - {}  stream complete
       error       - {"message": "..."}  error occurred
     """
@@ -673,11 +672,6 @@ async def run_agent_stream(
                     f"event: tool_result\n"
                     f"data: {_serialize({'tool': tool_block.name, 'result': result})}\n\n"
                 )
-
-                # If result has coordinates, send map update
-                if isinstance(result, dict) and "coordinates" in result:
-                    coords = result["coordinates"]
-                    yield f"event: map_update\ndata: {_serialize(coords)}\n\n"
 
                 tool_results.append({
                     "type": "tool_result",

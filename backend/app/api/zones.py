@@ -11,6 +11,7 @@ router = APIRouter()
 
 
 @router.get("/api/zones/geojson")
+# TODO: add response_model when a matching output schema is defined
 async def zones_geojson(
     bbox: str | None = Query(None, description="Bounding box: min_lng,min_lat,max_lng,max_lat"),
     semester: str | None = Query(None, description="Semester"),
@@ -26,15 +27,22 @@ async def zones_geojson(
     params = {"semester": semester}
     bbox_clause = ""
     if bbox:
-        parts = bbox.split(",")
-        if len(parts) == 4:
-            params["min_lng"] = float(parts[0])
-            params["min_lat"] = float(parts[1])
-            params["max_lng"] = float(parts[2])
-            params["max_lat"] = float(parts[3])
+        try:
+            parts = bbox.split(",")
+            if len(parts) != 4:
+                raise ValueError("bbox must have 4 comma-separated values")
+            min_lng, min_lat, max_lng, max_lat = [float(p) for p in parts]
+            if not (min_lng < max_lng and min_lat < max_lat):
+                raise ValueError("min values must be less than max values")
+            params["min_lng"] = min_lng
+            params["min_lat"] = min_lat
+            params["max_lng"] = max_lng
+            params["max_lat"] = max_lat
             bbox_clause = """
                 AND z.geom && ST_MakeEnvelope(:min_lng, :min_lat, :max_lng, :max_lat, 4326)
             """
+        except (ValueError, TypeError) as e:
+            raise HTTPException(status_code=400, detail=f"Invalid bbox parameter: {e}")
 
     result = await db.execute(
         text(f"""
@@ -84,6 +92,7 @@ async def zones_geojson(
 
 
 @router.get("/api/zones/by-coordinates")
+# TODO: add response_model when a matching output schema is defined
 async def zone_by_coordinates(
     lat: float = Query(...),
     lng: float = Query(...),
@@ -112,6 +121,7 @@ async def zone_by_coordinates(
 
 
 @router.get("/api/quotations")
+# TODO: add response_model when a matching output schema is defined
 async def get_quotations(
     link_zona: str = Query(...),
     semester: str | None = Query(None),

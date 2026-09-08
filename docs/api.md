@@ -130,6 +130,8 @@ Main valuation endpoint. Geocodes an address, finds its OMI zone, and returns pr
 - `404` -- address not found by geocoder
 - `404` -- no OMI zone found for location (not even within 200m fallback)
 
+---
+
 ### POST /api/valuate/enhanced
 
 Enhanced valuation with correction coefficients. Takes property-specific details and applies Italian appraisal methodology adjustments to the OMI base range.
@@ -183,6 +185,33 @@ Enhanced valuation with correction coefficients. Takes property-specific details
 }
 ```
 
+---
+
+### GET /api/coefficients
+
+Returns all available correction coefficient factors and options. Used by the frontend to dynamically build the property details form.
+
+**Response:**
+```json
+{
+  "factors": {
+    "renovation": {
+      "label": "Ristrutturazione",
+      "label_en": "Renovation",
+      "options": [
+        {"key": "premium_post_2015", "label": "Ristrutturazione integrale post-2015", "label_en": "Premium renovation post-2015", "pct": 0.10},
+        {"key": "standard_recent", "label": "Ristrutturazione parziale/recente", "label_en": "Standard/recent renovation", "pct": 0.05},
+        {"key": "none", "label": "Nessuna ristrutturazione", "label_en": "No renovation", "pct": 0.0},
+        {"key": "needs_work", "label": "Da ristrutturare", "label_en": "Needs renovation", "pct": -0.10}
+      ]
+    },
+    ...
+  }
+}
+```
+
+---
+
 ### GET /api/zones/geojson
 
 Returns zone polygons as GeoJSON for map display.
@@ -196,6 +225,8 @@ Returns zone polygons as GeoJSON for map display.
 
 **Response:** GeoJSON FeatureCollection with zone properties and average price data.
 
+---
+
 ### GET /api/zones/by-coordinates
 
 Look up zone info for a specific point.
@@ -208,17 +239,7 @@ Look up zone info for a specific point.
 | lng | float | yes | Longitude |
 | semester | string | no | Semester (defaults to latest) |
 
-### GET /api/semesters
-
-List all available data periods.
-
-**Response:**
-```json
-{
-  "semesters": ["2024_S2", "2024_S1", "2023_S2", "..."],
-  "latest": "2024_S2"
-}
-```
+---
 
 ### GET /api/quotations
 
@@ -230,6 +251,8 @@ Quotations for a specific zone.
 |-----------|------|----------|-------------|
 | link_zona | string | yes | Zone identifier |
 | semester | string | no | Defaults to latest |
+
+---
 
 ### POST /api/transactions
 
@@ -252,6 +275,8 @@ Create a manually entered transaction record.
 }
 ```
 
+---
+
 ### GET /api/transactions
 
 List transactions, optionally filtered.
@@ -263,25 +288,33 @@ List transactions, optionally filtered.
 | link_zona | string | no | Filter by zone |
 | municipality | string | no | Filter by municipality |
 
+---
+
 ### PUT /api/transactions/{id}
 
 Update a transaction record.
+
+---
 
 ### DELETE /api/transactions/{id}
 
 Delete a transaction record.
 
-### GET /api/compare
+---
 
-Compare valuations for multiple addresses.
+### GET /api/semesters
 
-**Query Parameters:**
+List all available data periods.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| addresses | string | yes | Comma-separated addresses |
-| property_type | int | no | Property type code (default 20) |
-| surface_m2 | float | no | Surface area |
+**Response:**
+```json
+{
+  "semesters": ["2024_S2", "2024_S1", "2023_S2", "..."],
+  "latest": "2024_S2"
+}
+```
+
+---
 
 ### GET /api/health
 
@@ -292,12 +325,16 @@ Health check endpoint (used by Railway for deployment monitoring).
 {"status": "ok"}
 ```
 
+---
+
 ## Geocoding Strategy
 
-1. **DB cache check** -- `omi.geocode_cache` table, keyed by normalized address string
-2. **Nominatim** -- free, 1 request/second rate limit, results cacheable permanently (ODbL)
-3. **Google Geocoding API** -- fallback, 10k free requests/month, requires API key
-4. **Cache write** -- successful results stored in `omi.geocode_cache` with source attribution
+1. **Nominatim** -- free, 1 request/second rate limit, results cacheable permanently (ODbL)
+2. **Google Geocoding API** -- fallback, 10k free requests/month, requires API key
+
+Note: There is currently **no database cache table** (`omi.geocode_cache` does not exist). Geocoding results are not persisted between requests.
+
+---
 
 ## Error Responses
 

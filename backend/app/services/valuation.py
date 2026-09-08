@@ -163,7 +163,7 @@ async def enhanced_valuate_address(
     3. Applies correction coefficients from property_details
     4. Compares with real transaction benchmarks
 
-    Returns a dict matching EnhancedValuationResponse.
+    Returns a dict with enhanced valuation data.
     Raises ValueError if address or zone not found, or no quotation data.
     """
     coords, zone, semester = await geocode_and_find_zone(address, semester, db)

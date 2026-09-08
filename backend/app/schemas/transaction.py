@@ -31,19 +31,4 @@ class TransactionUpdate(BaseModel):
     notes: str | None = None
 
 
-class TransactionResponse(BaseModel):
-    id: int
-    transaction_date: date | None
-    transaction_type: str | None
-    declared_price: float | None
-    municipality: str | None
-    omi_zone: str | None
-    link_zona: str | None
-    cadastral_category: str | None
-    cadastral_vani: float | None
-    cadastral_mq: float | None
-    cadastral_mc: float | None
-    notes: str | None
-    created_at: str | None
 
-    model_config = {"from_attributes": True}

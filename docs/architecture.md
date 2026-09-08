@@ -8,13 +8,13 @@
 |  (Vite + Tailwind)|     |  (Python 3.12+)        |     |  PostGIS         |
 |  on Vercel        |     |  on Railway             |     |  on Supabase     |
 +-------------------+     +-------+----------------+     +------------------+
-                                  |
-                                  v
-                          +----------------+
-                          |  Anthropic API |
-                          |  (Claude       |
-                          |   Sonnet 4)    |
-                          +----------------+
+                                   |
+                                   v
+                           +----------------+
+                           |  Anthropic API |
+                           |  (Claude       |
+                           |   Sonnet 4)    |
+                           +----------------+
 ```
 
 Four services:
@@ -99,17 +99,6 @@ CREATE TABLE omi.transactions (
 );
 ```
 
-**omi.geocode_cache** -- Cached geocoding results
-```sql
-CREATE TABLE omi.geocode_cache (
-    address             TEXT PRIMARY KEY,
-    lat                 DOUBLE PRECISION,
-    lng                 DOUBLE PRECISION,
-    source              VARCHAR(30),
-    created_at          TIMESTAMPTZ DEFAULT NOW()
-);
-```
-
 ### Indexes
 
 ```sql
@@ -178,30 +167,28 @@ The agent operates as an Italian-speaking real estate consultant:
 
 ```
 GET /api/valuate?address=...&surface_m2=...
-        |
-        v
+         |
+         v
 [1] Geocode address --> lat/lng
-    - Check omi.geocode_cache first
     - Try Nominatim (free, 1 req/sec)
     - Fallback to Google Geocoding API
-    - Cache result in DB
-        |
-        v
+         |
+         v
 [2] Spatial lookup: ST_Intersects(zone.geom, point)
     - Find which OMI zone polygon contains the point
     - If no exact match, fallback to ST_DWithin(200m)
-        |
-        v
+         |
+         v
 [3] Fetch quotations for zone + semester
     - JOIN omi.quotations ON link_zona + semester
     - Filter by property_type_code
     - Sort by is_prevalent DESC
-        |
-        v
+         |
+         v
 [4] Fetch comparable transactions
     - SELECT from omi.transactions WHERE link_zona or omi_zone matches
-        |
-        v
+         |
+         v
 [5] Compute estimate
     - Midpoint of prevalent price_min/price_max * surface_m2
     - Return range (min, mid, max) + comparables
@@ -211,14 +198,14 @@ GET /api/valuate?address=...&surface_m2=...
 
 ```
 User types message in chat
-        |
-        v
+         |
+         v
 POST /api/chat (SSE)
-        |
-        v
+         |
+         v
 Claude orchestrates steps [1]-[5] via tool calls
-        |
-        v
+         |
+         v
 Streams text explanation + inline valuation cards + map updates
 ```
 
@@ -234,8 +221,9 @@ vendocasa/
 |   |   +-- main.py                # FastAPI app + CORS middleware
 |   |   +-- config.py              # Settings (pydantic-settings, reads .env)
 |   |   +-- database.py            # Async SQLAlchemy engine
-|   |   +-- models/                # ORM models (Zone, Quotation, Transaction)
 |   |   +-- schemas/               # Pydantic request/response schemas
+|   |   |   +-- enhanced_valuation.py
+|   |   |   +-- transaction.py
 |   |   +-- api/                   # Route handlers
 |   |   |   +-- chat.py            # POST /api/chat (SSE streaming)
 |   |   |   +-- valuations.py      # Valuation endpoints
@@ -246,6 +234,9 @@ vendocasa/
 |   |       +-- agent.py           # AI agent (Claude, tools, SSE loop)
 |   |       +-- valuation.py       # Geocoding + zone lookup + estimate
 |   |       +-- coefficients.py    # Correction coefficient system
+|   |       +-- zone_lookup.py     # PostGIS spatial queries
+|   |       +-- geocoder.py        # Nominatim + Google geocoding
+|   |       +-- document_store.py  # PDF/image upload handling
 |   +-- scripts/                   # Import scripts
 |   |   +-- import_omi.py          # Unified entry point
 |   |   +-- import_omi_zones.py    # KML -> PostGIS importer
@@ -264,6 +255,8 @@ vendocasa/
 |   |   |   +-- ui/                # Design system primitives
 |   |   |   |   +-- Button.tsx     # Primary/secondary/ghost/danger variants
 |   |   |   |   +-- Logo.tsx       # VendoCasa wordmark SVG
+|   |   |   |   +-- Badge.tsx
+|   |   |   |   +-- Card.tsx
 |   |   |   +-- Landing/           # Dark landing page sections
 |   |   |   |   +-- LandingPage.tsx
 |   |   |   |   +-- HeroSection.tsx
@@ -279,12 +272,6 @@ vendocasa/
 |   |   |   |   +-- ChatPanel.tsx  # Main chat UI (messages + input + PDF upload)
 |   |   |   |   +-- ChatMessage.tsx # Message bubbles (dark theme)
 |   |   |   |   +-- InlineToolResult.tsx # Valuation cards in chat
-|   |   |   +-- Map/               # Leaflet map + zone overlay (not currently used)
-|   |   |   +-- Valuation/         # Property valuation UI
-|   |   |   |   +-- CoefficientWizard.tsx  # Main wizard (delegates to sub-components)
-|   |   |   |   +-- ConservationStep.tsx   # Conservation state selector
-|   |   |   |   +-- DetailsStep.tsx        # Property detail coefficient inputs
-|   |   |   |   +-- EnhancedResults.tsx    # Adjusted valuation results display
 |   |   |   +-- CookieBanner.tsx   # GDPR consent (gates drawer opening)
 |   |   +-- api/client.ts          # API client (axios + SSE streaming)
 |   |   +-- types/index.ts         # TypeScript types

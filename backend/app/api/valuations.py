@@ -10,6 +10,7 @@ router = APIRouter()
 
 
 @router.get("/api/valuate")
+# TODO: add response_model when a matching output schema is defined
 async def valuate(
     address: str = Query(..., description="Italian address to valuate"),
     property_type: int = Query(20, description="Property type code (20=Abitazioni civili)"),
@@ -26,6 +27,7 @@ async def valuate(
 
 
 @router.post("/api/valuate/enhanced")
+# TODO: add response_model when a matching output schema is defined
 async def enhanced_valuate(
     request: EnhancedValuationRequest,
     db: AsyncSession = Depends(get_db),
@@ -50,6 +52,7 @@ async def enhanced_valuate(
 
 
 @router.get("/api/coefficients")
+# TODO: add response_model when a matching output schema is defined
 async def list_coefficients():
     """Return all available correction coefficient factors and options.
 

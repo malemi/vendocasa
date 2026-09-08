@@ -218,7 +218,7 @@ The "Consultazione Valori Immobiliari Dichiarati" service shows actual prices pa
 - The viewer uses a proprietary SVG map renderer (GEOPOI)
 - Minimum 5 transactions per area shown (privacy threshold)
 
-For this tool, transactions are entered manually via a form in the frontend.
+For this tool, transactions are entered manually via the API endpoints (`POST/GET/PUT/DELETE /api/transactions`).
 
 ## Known Data Quirks
 

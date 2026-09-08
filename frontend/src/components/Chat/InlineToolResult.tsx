@@ -1,3 +1,6 @@
+import { FASCIA_LABELS } from "../../types";
+import { formatEur } from "../../utils/format";
+
 /**
  * Compact inline cards for tool results displayed within chat messages.
  */
@@ -26,12 +29,7 @@ function BasicValuationCard({ result }: { result: Record<string, unknown> }) {
 
   const zoneName = `${zone.municipality || ""} - Zona ${zone.zone_code || ""}`;
   const fascia = zone.fascia as string;
-  const fasciaLabel =
-    fascia === "B" ? "Centrale" :
-    fascia === "C" ? "Semicentrale" :
-    fascia === "D" ? "Periferica" :
-    fascia === "E" ? "Suburbana" :
-    fascia === "R" ? "Rurale" : fascia;
+  const fasciaLabel = FASCIA_LABELS[fascia] ?? fascia;
 
   return (
     <div className="mt-2 p-3 rounded-lg bg-bg-elevated border border-border text-xs leading-relaxed">
@@ -107,10 +105,3 @@ function EnhancedValuationCard({ result }: { result: Record<string, unknown> }) 
   );
 }
 
-function formatEur(value: number): string {
-  return new Intl.NumberFormat("it-IT", {
-    style: "currency",
-    currency: "EUR",
-    maximumFractionDigits: 0,
-  }).format(value);
-}

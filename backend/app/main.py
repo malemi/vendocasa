@@ -52,8 +52,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 
@@ -69,7 +69,7 @@ async def user_tracking(request: Request, call_next):
         "vendocasa_uid",
         user_id,
         max_age=365 * 24 * 3600,
-        httponly=False,
+        httponly=True,
         secure=True,
         samesite="none",
     )

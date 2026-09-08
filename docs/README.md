@@ -29,7 +29,7 @@ Italian Real Estate Valuation Tool powered by OMI data, PostGIS spatial queries,
 3. Type an address (e.g. "Via Sottocorno 17, Milano, 62mq")
 4. The AI agent asks about your property details conversationally
 5. View the valuation inline with correction coefficients
-6. Learn about agent incentive misalignment (Freakonomics)
+5. Learn about agent incentive misalignment (Freakonomics)
 
 ### For Developers
 
@@ -49,13 +49,13 @@ Italian Real Estate Valuation Tool powered by OMI data, PostGIS spatial queries,
 ```
 Vercel                         Railway                        Supabase
 (React + Vite + Tailwind)  --> (FastAPI + GDAL)          --> (PostgreSQL + PostGIS)
-                               |                              |
-                               +-- AI Chat Agent              +-- omi.zones (polygons)
-                               |   (Claude Sonnet 4, SSE)     +-- omi.quotations (EUR/m2)
-                               +-- Geocoding                  +-- omi.transactions
-                               |   (Nominatim + Google)       +-- omi.geocode_cache
-                               +-- Spatial Queries
-                                   (ST_Intersects)
+                                |                              |
+                                +-- AI Chat Agent              +-- omi.zones (polygons)
+                                |   (Claude Sonnet 4, SSE)     +-- omi.quotations (EUR/m2)
+                                +-- Geocoding                  +-- omi.transactions
+                                |   (Nominatim + Google)
+                                +-- Spatial Queries
+                                    (ST_Intersects)
 ```
 
 ### Key Components
@@ -129,21 +129,21 @@ See **[Data Sources](data-sources.md)** for full CSV/KML column schemas and **[D
 
 ```
 Address --> Geocode --> Zone Lookup --> OMI Quotations --> Basic Estimate
-                                                              |
-                                                              v
-                                                    AI Agent asks about:
-                                                    conservation, floor,
-                                                    exposure, noise, etc.
-                                                              |
-                                                              v
-                                                    Correction Coefficients
-                                                    applied (+/- %)
-                                                              |
-                                                              v
-                                                    Enhanced Estimate
+                                                               |
+                                                               v
+                                                     AI Agent asks about:
+                                                     conservation, floor,
+                                                     exposure, noise, etc.
+                                                               |
+                                                               v
+                                                     Correction Coefficients
+                                                     applied (+/- %)
+                                                               |
+                                                               v
+                                                     Enhanced Estimate
 ```
 
-1. **Geocoding**: Address to lat/lng (Nominatim, cached in DB)
+1. **Geocoding**: Address to lat/lng (Nominatim, no DB cache)
 2. **Zone lookup**: `ST_Intersects` finds which OMI polygon contains the point
 3. **Quotation retrieval**: EUR/m2 min/max for zone + property type + conservation state
 4. **Basic estimate**: Midpoint of price range * surface area
@@ -163,8 +163,9 @@ vendocasa/
 |   |   +-- main.py                # FastAPI app + CORS middleware
 |   |   +-- config.py              # Settings (reads .env via pydantic-settings)
 |   |   +-- database.py            # Async SQLAlchemy engine
-|   |   +-- models/                # ORM models (Zone, Quotation, Transaction)
 |   |   +-- schemas/               # Pydantic request/response schemas
+|   |   |   +-- enhanced_valuation.py
+|   |   |   +-- transaction.py
 |   |   +-- api/                   # Route handlers
 |   |   |   +-- chat.py            # POST /api/chat (SSE streaming)
 |   |   |   +-- valuations.py      # GET /api/valuate, POST /api/valuate/enhanced
@@ -175,6 +176,9 @@ vendocasa/
 |   |       +-- agent.py           # AI chat agent (Claude, tool calling, SSE)
 |   |       +-- valuation.py       # Geocoding + zone lookup + estimate
 |   |       +-- coefficients.py    # Correction coefficient system
+|   |       +-- zone_lookup.py     # PostGIS spatial queries
+|   |       +-- geocoder.py        # Nominatim + Google geocoding
+|   |       +-- document_store.py  # PDF/image upload handling
 |   +-- scripts/                   # Import scripts
 |   |   +-- import_omi.py          # Unified entry point
 |   |   +-- import_omi_zones.py    # KML -> PostGIS importer
@@ -189,15 +193,14 @@ vendocasa/
 |   |   +-- index.css              # Tailwind @import + @theme (dark palette)
 |   |   +-- App.tsx                # Router + drawer state orchestrator
 |   |   +-- components/
-|   |   |   +-- ui/                # Design system (Button, Logo)
+|   |   |   +-- ui/                # Design system (Button, Logo, Badge, Card)
 |   |   |   +-- Landing/           # Landing page sections (Hero, HowItWorks, etc.)
 |   |   |   +-- AppDrawer/         # Chat overlay (centered modal / fullscreen)
 |   |   |   +-- Chat/              # AI chat interface
 |   |   |   |   +-- ChatPanel.tsx  # Messages + input + PDF upload
 |   |   |   |   +-- ChatMessage.tsx # Message bubbles (dark theme)
 |   |   |   |   +-- InlineToolResult.tsx # Valuation cards in chat
-|   |   |   +-- Valuation/         # Coefficient wizard (decomposed)
-|   |   |   +-- Map/               # Leaflet map (not currently used in UI)
+|   |   |   +-- CookieBanner.tsx   # GDPR consent (gates drawer opening)
 |   |   +-- api/client.ts          # API client (axios + SSE streaming)
 |   |   +-- types/index.ts         # TypeScript types
 |   |   +-- pages/                 # Privacy, terms of service
