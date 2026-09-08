@@ -91,4 +91,10 @@ See the `docs/` directory:
 
 ## License
 
-Personal use only. OMI data source: Agenzia delle Entrate -- OMI.
+The source code is MIT licensed -- see [LICENSE](LICENSE).
+
+The licence covers the code only, not the data it processes. OMI quotations
+come from the Agenzia delle Entrate and must be attributed as "Agenzia delle
+Entrate -- OMI". Declared transaction values carry a separate regime and may
+not be redistributed; see [docs/legal.md](docs/legal.md) before publishing any
+instance of this tool.
