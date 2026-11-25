@@ -140,8 +140,9 @@ def test_a_failed_import_leaves_the_previous_data_current(clean, tmp_path):
     from scripts.import_omi import SemesterImportFailed, import_semester
 
     import_semester(clean, SEMESTER, make_archive(tmp_path))
-    # A duplicate quotation key makes COPY fail after the old rows were deleted.
-    broken = valori_csv() + valori_csv().splitlines()[2] + "\n"
+    # A description longer than property_type_desc's VARCHAR(60) makes COPY fail
+    # after the old rows were deleted (duplicates would not: the importer drops them).
+    broken = valori_csv().replace("Abitazioni civili", "A" * 61, 1)
     with pytest.raises(SemesterImportFailed):
         import_semester(clean, SEMESTER, make_archive(tmp_path, "broken.zip", valori=broken))
     assert scalar(clean, "SELECT count(*) FROM omi.quotations WHERE semester = :s", s=SEMESTER) == 3

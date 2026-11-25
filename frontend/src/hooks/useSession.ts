@@ -39,6 +39,7 @@ export function useSession(): SessionState {
   return { session, ready, arrivedFromSignInLink };
 }
 
+/** Sign out on this device only; sessions on the user's other devices stay valid. */
 export async function signOut(): Promise<void> {
-  if (supabase) await supabase.auth.signOut();
+  if (supabase) await supabase.auth.signOut({ scope: "local" });
 }

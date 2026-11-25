@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 PUBLIC_API_PATHS = frozenset({"/api/health"})
 AUDIENCE = "authenticated"
 JWKS_MIN_REFETCH_SECONDS = 60
+JWKS_RETRY_AFTER_FAILURE_SECONDS = 5
 JWKS_TIMEOUT_SECONDS = 5
 
 
@@ -61,16 +62,24 @@ def token_issuer() -> str:
 
 
 class JwksCache:
-    """Signing keys from the identity service's JWKS endpoint, by key ID."""
+    """Signing keys from the identity service's JWKS endpoint, by key ID.
+
+    A token is called invalid only after a SUCCESSFUL fetch shows its key ID is
+    not the project's. While fetching fails, requests get `auth_unavailable`
+    (503) and the fetch is retried at most every JWKS_RETRY_AFTER_FAILURE_SECONDS;
+    a valid session is never refused as invalid because the key server was down.
+    """
 
     def __init__(self) -> None:
         self._keys: dict[str, object] = {}
         self._fetched_at: float | None = None
+        self._failed_at: float | None = None
         self._lock = asyncio.Lock()
 
     def clear(self) -> None:
         self._keys = {}
         self._fetched_at = None
+        self._failed_at = None
 
     async def key_for(self, kid: str) -> object:
         if kid in self._keys:
@@ -78,12 +87,11 @@ class JwksCache:
         async with self._lock:
             if kid in self._keys:
                 return self._keys[kid]
-            recently = (
-                self._fetched_at is not None
-                and time.monotonic() - self._fetched_at < JWKS_MIN_REFETCH_SECONDS
-            )
-            if recently:
-                raise AuthFailure("invalid_token")
+            now = time.monotonic()
+            if self._fetched_at is not None and now - self._fetched_at < JWKS_MIN_REFETCH_SECONDS:
+                raise AuthFailure("invalid_token")  # fresh keys, and this ID is not among them
+            if self._failed_at is not None and now - self._failed_at < JWKS_RETRY_AFTER_FAILURE_SECONDS:
+                raise AuthFailure("auth_unavailable", 503)
             await self._refresh()
             if kid not in self._keys:
                 raise AuthFailure("invalid_token")
@@ -91,13 +99,13 @@ class JwksCache:
 
     async def _refresh(self) -> None:
         url = f"{token_issuer()}/.well-known/jwks.json"
-        self._fetched_at = time.monotonic()
         try:
             async with httpx.AsyncClient(timeout=JWKS_TIMEOUT_SECONDS) as client:
                 response = await client.get(url)
                 response.raise_for_status()
                 payload = response.json()
         except (httpx.HTTPError, ValueError) as exc:
+            self._failed_at = time.monotonic()
             logger.error("JWKS fetch from %s failed: %s", url, type(exc).__name__)
             raise AuthFailure("auth_unavailable", 503) from exc
         keys: dict[str, object] = {}
@@ -110,6 +118,8 @@ class JwksCache:
             except jwt.PyJWTError:
                 logger.warning("Ignoring unusable JWKS key %s", kid)
         self._keys = keys
+        self._fetched_at = time.monotonic()
+        self._failed_at = None
 
 
 jwks_cache = JwksCache()

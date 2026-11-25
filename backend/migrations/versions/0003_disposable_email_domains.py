@@ -54,7 +54,7 @@ def upgrade() -> None:
         AS $$
         DECLARE
             v_email text := lower(coalesce(event->'user'->>'email', event->>'email', ''));
-            v_domain text := split_part(v_email, '@', 2);
+            v_domain text := rtrim(split_part(v_email, '@', 2), '.');
         BEGIN
             WHILE v_domain <> '' LOOP
                 IF EXISTS (

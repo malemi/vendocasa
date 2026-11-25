@@ -166,3 +166,40 @@ async def test_algorithm_comes_from_configuration_not_the_token(es256):
     )
     assert await _failure_code(hs256_with_kid) == ("invalid_token", 401)
     assert await _failure_code(make_token()) == ("invalid_token", 401)  # no key ID at all
+
+
+class _FlakyJwksServer(_JwksServer):
+    """Fails the first `failures` fetches, then serves the keys."""
+
+    def __init__(self, jwks: dict, failures: int):
+        super().__init__(jwks)
+        self.failures = failures
+
+    def handler(self, request: httpx.Request) -> httpx.Response:
+        self.fetches += 1
+        if self.fetches <= self.failures:
+            return httpx.Response(503)
+        return httpx.Response(200, json=self.jwks)
+
+
+@pytest.mark.asyncio
+async def test_a_failed_key_fetch_is_unavailable_never_invalid(es256, monkeypatch):
+    private_key, server = es256
+    flaky = _FlakyJwksServer(server.jwks, failures=1)
+    original_client = httpx._client.AsyncClient  # the fixture already patched httpx.AsyncClient
+    monkeypatch.setattr(auth.httpx, "AsyncClient",
+                        lambda **kw: original_client(transport=httpx.MockTransport(flaky.handler), **kw))
+    clock = [1000.0]
+    monkeypatch.setattr(auth.time, "monotonic", lambda: clock[0])
+    token = _es256_token(private_key)
+
+    # The fetch fails: the session is not called invalid, and nothing signs the user out.
+    assert await _failure_code(token) == ("auth_unavailable", 503)
+    # Within the retry interval, no new fetch is made.
+    clock[0] += 1
+    assert await _failure_code(token) == ("auth_unavailable", 503)
+    assert flaky.fetches == 1
+    # After the interval the fetch succeeds and the same token is valid.
+    clock[0] += auth.JWKS_RETRY_AFTER_FAILURE_SECONDS
+    assert (await verify_token(token)).email == "luisa@example.com"
+    assert flaky.fetches == 2

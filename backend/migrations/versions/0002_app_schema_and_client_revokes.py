@@ -32,7 +32,10 @@ def upgrade() -> None:
         op.execute(f"REVOKE ALL ON ALL TABLES IN SCHEMA {schema} FROM {CLIENT_ROLES}")
         op.execute(f"REVOKE ALL ON ALL SEQUENCES IN SCHEMA {schema} FROM {CLIENT_ROLES}")
         op.execute(f"REVOKE ALL ON ALL FUNCTIONS IN SCHEMA {schema} FROM {CLIENT_ROLES}")
-        for kind in ("TABLES", "SEQUENCES", "FUNCTIONS"):
+        # New functions get EXECUTE for PUBLIC through a global default that a
+        # per-schema rule cannot remove; they are protected by the schema-level
+        # revoke above (no USAGE) and by explicit revokes where they are created.
+        for kind in ("TABLES", "SEQUENCES"):
             op.execute(
                 f"ALTER DEFAULT PRIVILEGES IN SCHEMA {schema} "
                 f"REVOKE ALL ON {kind} FROM {CLIENT_ROLES}"

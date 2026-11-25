@@ -185,17 +185,16 @@ async def settle(reservation: Reservation | str, actual_micro: int | None) -> bo
             ),
             {"c": charged, "amt": amount, "m": month, "g": GLOBAL_SCOPE, "a": account_id},
         )
-        if charged > amount:
-            # The reservation was not an upper bound: the price table or the
-            # token count is wrong. Stop paid calls until a person checks it.
-            logger.error(
-                "Reservation %s settled at %d micro-USD above its %d reservation; "
-                "turning paid calls off.", reservation_id, charged, amount,
-            )
-            await conn.execute(
-                text("UPDATE app.service_flag SET enabled = false WHERE name = :n"),
-                {"n": PAID_CALLS_FLAG},
-            )
+    if charged > amount:
+        # The reservation was not an upper bound: the price table or the token
+        # count is wrong. Stop paid calls until a person checks it. A separate
+        # transaction, so the flag is never locked after the month rows
+        # (reserve() takes the flag first).
+        logger.error(
+            "Reservation %s settled at %d micro-USD above its %d reservation; "
+            "turning paid calls off.", reservation_id, charged, amount,
+        )
+        await set_paid_calls(False)
     return True
 
 

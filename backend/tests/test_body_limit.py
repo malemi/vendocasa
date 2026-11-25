@@ -61,3 +61,19 @@ def test_other_paths_get_the_default_limit(small_limit_client):
 def test_a_malformed_content_length_is_refused(small_limit_client):
     response = small_limit_client.post("/api/chat", content=b"x", headers={"content-length": "abc"})
     assert response.status_code in (400, 413)
+
+
+def test_the_api_answers_a_chunked_oversized_body_with_the_italian_413(client, fake_anthropic):
+    from tests.auth_helpers import auth_headers
+
+    factory = fake_anthropic()
+
+    def chunks():
+        for _ in range(20):
+            yield b" " * (64 * 1024)  # 1.25 MiB of whitespace, no Content-Length
+
+    response = client.post("/api/chat", content=chunks(),
+                           headers={**auth_headers(), "content-type": "application/json"})
+    assert response.status_code == 413
+    assert response.json()["detail"]["error"] == "too_large"
+    assert factory.instance.messages.calls == []

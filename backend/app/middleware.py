@@ -62,19 +62,29 @@ class BodyLimitMiddleware:
                 return
 
         received = 0
+        exceeded = False
         response_started = False
 
         async def counting_receive() -> Message:
-            nonlocal received
+            nonlocal received, exceeded
             message = await receive()
             if message["type"] == "http.request":
                 received += len(message.get("body", b""))
                 if received > limit:
+                    # Raising aborts body parsing, so the endpoint never runs.
+                    exceeded = True
                     raise _BodyTooLarge()
             return message
 
         async def tracking_send(message: Message) -> None:
             nonlocal response_started
+            if exceeded:
+                # The application turned the aborted read into its own error
+                # response (FastAPI answers 400); answer 413 instead, once.
+                if message["type"] == "http.response.start" and not response_started:
+                    response_started = True
+                    await _send_too_large(send)
+                return
             if message["type"] == "http.response.start":
                 response_started = True
             await send(message)

@@ -172,7 +172,9 @@ export function ChatPanel({ onSessionLost }: ChatPanelProps) {
       const allMsgs = [...messages.filter((m) => m.id !== "welcome"), last];
       return allMsgs.map((m, idx) => ({
         role: m.role,
-        content: m.content,
+        // An assistant turn stopped before any text has empty content, which the
+        // model API refuses; send a placeholder so the conversation stays usable.
+        content: m.role === "assistant" && !m.content.trim() ? "(risposta non disponibile)" : m.content,
         ...(m.documents?.length && idx === allMsgs.length - 1
           ? { document_ids: m.documents.map((d) => d.docId) }
           : {}),
@@ -231,7 +233,11 @@ export function ChatPanel({ onSessionLost }: ChatPanelProps) {
       }
     } finally {
       setIsStreaming(false);
-      updateAssistant((m) => ({ ...m, isStreaming: false }));
+      updateAssistant((m) => ({
+        ...m,
+        isStreaming: false,
+        content: m.content.trim() || m.toolResults?.length ? m.content : "Risposta interrotta.",
+      }));
       abortControllerRef.current = null;
     }
   }, [input, isStreaming, messages, pendingDocs, onSessionLost, atLimit]);
