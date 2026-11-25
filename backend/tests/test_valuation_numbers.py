@@ -1,8 +1,9 @@
 """Valuation arithmetic, no-data outcomes and comparables (app/services/valuation.py).
 
 The database returns NUMERIC columns as Decimal; these tests feed Decimal rows
-through the real valuation functions with a recording fake session. The same
-paths run on real PostGIS in the M4 integration tests.
+through the real valuation functions with a recording fake session.
+tests/integration/test_valuation_postgis.py runs the same paths on real PostGIS,
+through the API routes.
 """
 
 from __future__ import annotations

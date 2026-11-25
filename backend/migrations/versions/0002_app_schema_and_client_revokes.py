@@ -4,11 +4,12 @@ The database provider's data API serves exposed schemas to holders of the
 public client key (`anon`) or of a user token (`authenticated`). Application
 state and OMI data are reachable only through the backend, so these roles,
 and PUBLIC, hold no privilege on either schema, nor on the tables, sequences
-and functions in it, including Alembic's version table. Default privileges
-extend this to tables and sequences created later. Functions created later
-still get PostgreSQL's global default EXECUTE for PUBLIC; without USAGE on
-the schema no client role can reach them, and the migration that creates a
-function also revokes its EXECUTE explicitly.
+and functions in it, including Alembic's version table. Objects created
+later are protected the same way: no client role has USAGE on either schema,
+and each migration that creates an object revokes client privileges on it
+explicitly. The per-schema default-privilege revokes below only undo earlier
+per-schema grants; they cannot remove a global default, such as PostgreSQL's
+EXECUTE for PUBLIC on new functions.
 
 The roles must exist. Supabase creates them; a plain PostgreSQL test database
 creates them from backend/sql/client_roles.sql before migrating.
