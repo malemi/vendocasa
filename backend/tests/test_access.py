@@ -167,7 +167,7 @@ def test_an_upload_belongs_to_its_account(client, fake_anthropic):
 
     foreign = _chat_with_document(client, ACCOUNT_B, doc_id)
     assert foreign.status_code == 400
-    assert "non trovato" in foreign.json()["detail"]
+    assert foreign.json()["detail"]["error"] == "document_expired"
 
     own = _chat_with_document(client, ACCOUNT_A, doc_id)
     assert own.status_code == 200
@@ -179,9 +179,7 @@ def test_foreign_and_missing_documents_are_indistinguishable(client):
     foreign = _chat_with_document(client, ACCOUNT_B, doc.doc_id)
     missing = _chat_with_document(client, ACCOUNT_B, "00000000-0000-4000-8000-000000000000")
     assert foreign.status_code == missing.status_code == 400
-    assert foreign.json()["detail"].replace(doc.doc_id, "ID") == missing.json()["detail"].replace(
-        "00000000-0000-4000-8000-000000000000", "ID"
-    )
+    assert foreign.json() == missing.json()  # identical bodies: nothing reveals the owner
 
 
 def test_system_role_is_refused(client, fake_anthropic):

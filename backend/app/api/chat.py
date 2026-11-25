@@ -97,10 +97,7 @@ async def chat(
     # history a client can make the backend re-send to Claude on every
     # tool-calling round (see agent.py's max_tool_rounds loop).
     if len(body.messages) > settings.agent_max_history_messages:
-        raise HTTPException(
-            400,
-            f"Conversazione troppo lunga (massimo {settings.agent_max_history_messages} messaggi).",
-        )
+        raise HTTPException(400, detail=refusal("history_limit"))
     for m in body.messages:
         if len(m.content) > settings.agent_max_message_chars:
             raise HTTPException(
@@ -129,10 +126,8 @@ async def chat(
             for doc_id in m.document_ids:
                 doc = get_document(doc_id, account.id)
                 if doc is None:
-                    raise HTTPException(
-                        400,
-                        f"Documento {doc_id} non trovato o scaduto. Ricaricalo.",
-                    )
+                    # Missing, expired and foreign documents look the same.
+                    raise HTTPException(400, detail=refusal("document_expired"))
                 total_attachment_bytes += doc.size
                 if total_attachment_bytes > settings.agent_max_attachment_bytes:
                     raise HTTPException(

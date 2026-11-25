@@ -23,6 +23,26 @@ class GeoResult:
     lat: float
     lng: float
     source: str
+    # "exact" only when the provider reports a building-level match; anything
+    # else, or no information, is "approximate". The user is told which.
+    precision: str = "approximate"
+    matched_address: str | None = None
+
+
+def _photon_precision(raw: dict) -> str:
+    props = (raw or {}).get("properties", {})
+    return "exact" if props.get("housenumber") or props.get("type") == "house" else "approximate"
+
+
+def _nominatim_precision(raw: dict) -> str:
+    raw = raw or {}
+    building = raw.get("type") in ("house", "building") or raw.get("addresstype") in ("house", "building")
+    return "exact" if building else "approximate"
+
+
+def _google_precision(raw: dict) -> str:
+    location_type = (raw or {}).get("geometry", {}).get("location_type")
+    return "exact" if location_type == "ROOFTOP" else "approximate"
 
 
 def _address_variations(address: str) -> list[str]:
@@ -90,7 +110,8 @@ class ItalianGeocoder:
             )
             if loc:
                 logger.info("Photon geocoded '%s' -> (%s, %s)", address, loc.latitude, loc.longitude)
-                return GeoResult(lat=loc.latitude, lng=loc.longitude, source="photon")
+                return GeoResult(lat=loc.latitude, lng=loc.longitude, source="photon",
+                                 precision=_photon_precision(loc.raw), matched_address=loc.address)
         except Exception as e:
             logger.warning("Photon failed for '%s': %s", address, e)
         return None
@@ -102,7 +123,8 @@ class ItalianGeocoder:
             )
             if loc:
                 logger.info("Nominatim geocoded '%s' -> (%s, %s)", address, loc.latitude, loc.longitude)
-                return GeoResult(lat=loc.latitude, lng=loc.longitude, source="nominatim")
+                return GeoResult(lat=loc.latitude, lng=loc.longitude, source="nominatim",
+                                 precision=_nominatim_precision(loc.raw), matched_address=loc.address)
         except Exception as e:
             logger.warning("Nominatim failed for '%s': %s", address, e)
         return None
@@ -130,7 +152,8 @@ class ItalianGeocoder:
             )
             if loc:
                 logger.info("Google geocoded '%s' -> (%s, %s)", address, loc.latitude, loc.longitude)
-                return GeoResult(lat=loc.latitude, lng=loc.longitude, source="google")
+                return GeoResult(lat=loc.latitude, lng=loc.longitude, source="google",
+                                 precision=_google_precision(loc.raw), matched_address=loc.address)
         except Exception as e:
             logger.warning("Google failed for '%s': %s", address, e)
         finally:

@@ -34,6 +34,8 @@ REFUSAL_MESSAGES: dict[str, str] = {
         "I documenti scadono dopo 30 minuti: riprova più tardi."
     ),
     "uploads_full": "Il caricamento dei documenti è momentaneamente pieno. Riprova più tardi.",
+    "document_expired": "Un documento allegato è scaduto o non è più disponibile. Ricaricalo.",
+    "history_limit": "La conversazione è troppo lunga. Inizia una nuova conversazione.",
     "concurrent": "C'è già una risposta in corso. Attendi che finisca.",
     "model_refusal": "Non posso aiutarti con questa richiesta. Prova a riformularla.",
     # Not a refusal: the provider failed. Shown instead of the provider's error.

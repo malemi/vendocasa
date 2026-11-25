@@ -43,7 +43,8 @@ class Settings(BaseSettings):
 
     # Bounded cost per chat request (backend/app/services/agent.py).
     agent_max_tool_rounds: int = 3
-    agent_max_history_messages: int = 20
+    # Bounded by the monthly spending caps; at the limit the UI offers a new conversation.
+    agent_max_history_messages: int = 50
     agent_max_message_chars: int = 4000
     agent_max_tokens: int = 4096
     # Per provider call, in seconds; well below the 15-minute window after

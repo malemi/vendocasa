@@ -1,4 +1,12 @@
-"""Valuation service: combines geocoding, zone lookup, and quotation retrieval."""
+"""Valuation service: combines geocoding, zone lookup, and quotation retrieval.
+
+Money arithmetic is exact (app/services/numbers.py). A quotation range that is
+missing, non-positive or reversed is unusable; when a zone has no usable range
+the result carries an explicit `no_data` entry instead of failing. Every result
+says whether the location is approximate (geocoding or zone fallback).
+"""
+
+from decimal import Decimal
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,6 +16,7 @@ from app.services.coefficients import (
     compare_with_benchmarks,
 )
 from app.services.geocoder import GeoResult, geocoder
+from app.services.numbers import jsonable_rows, money, to_decimal, usable_range
 from app.services.zone_lookup import ZoneResult, find_zone, get_latest_semester
 
 
@@ -66,24 +75,56 @@ async def get_quotations(
 
 async def get_comparables(
     link_zona: str,
-    zone_code: str,
     db: AsyncSession,
     limit: int = 20,
 ) -> list[dict]:
-    """Fetch comparable transactions for a zone."""
+    """Fetch comparable transactions for a zone, by its exact link_zona.
+
+    Zone codes such as "B01" repeat across municipalities, so matching on the
+    code would mix in sales from other cities; rows without a link_zona are
+    therefore not comparables.
+    """
     result = await db.execute(
         text("""
             SELECT transaction_date, declared_price, cadastral_category,
                    cadastral_vani, cadastral_mq, notes
             FROM omi.transactions
             WHERE link_zona = :link_zona
-               OR omi_zone = :zone_code
-            ORDER BY transaction_date DESC
+            ORDER BY transaction_date DESC NULLS LAST, id DESC
             LIMIT :limit
         """),
-        {"link_zona": link_zona, "zone_code": zone_code, "limit": limit},
+        {"link_zona": link_zona, "limit": limit},
     )
     return [dict(row._mapping) for row in result.all()]
+
+
+NO_DATA = {
+    "reason": "no_usable_quotation",
+    "message": "Nessuna quotazione OMI utilizzabile per questa zona, tipologia e semestre.",
+}
+
+
+def _zone_info(zone: ZoneResult) -> dict:
+    return {
+        "link_zona": zone.link_zona,
+        "zone_code": zone.zone_code,
+        "fascia": zone.fascia,
+        "municipality": zone.municipality_name,
+        "description": zone.zone_description,
+        "distance_m": zone.distance_m,
+    }
+
+
+def _location(coords: GeoResult, zone: ZoneResult) -> dict:
+    """Where the estimate is placed, and whether that place is approximate."""
+    outside_zone = bool(zone.distance_m and zone.distance_m > 0)
+    return {
+        "precision": coords.precision,
+        "source": coords.source,
+        "matched_address": coords.matched_address,
+        "zone_distance_m": zone.distance_m,
+        "approximate": coords.precision != "exact" or outside_zone,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -105,42 +146,40 @@ async def valuate_address(
     coords, zone, semester = await geocode_and_find_zone(address, semester, db)
 
     quotations = await get_quotations(zone.link_zona, semester, property_type, db)
-    comparables = await get_comparables(zone.link_zona, zone.zone_code, db)
+    comparables = await get_comparables(zone.link_zona, db)
 
-    # Compute estimate from prevalent quotation
+    # The prevalent quotation's range, or the first usable one.
+    ranges = [
+        (bool(q.get("is_prevalent")), usable_range(q.get("price_min"), q.get("price_max")))
+        for q in quotations
+    ]
+    usable = [(prevalent, r) for prevalent, r in ranges if r is not None]
+    chosen = next((r for prevalent, r in usable if prevalent), usable[0][1] if usable else None)
+
     estimate = None
-    prevalent = next((q for q in quotations if q.get("is_prevalent")), None)
-    if prevalent is None and quotations:
-        prevalent = quotations[0]
+    surface = to_decimal(surface_m2)
+    if chosen and surface is not None and surface > 0:
+        p_min, p_max = chosen
+        estimate = {
+            "min": money(p_min * surface),
+            "max": money(p_max * surface),
+            "mid": money((p_min + p_max) / 2 * surface),
+            "eur_per_m2_range": [money(p_min), money(p_max)],
+        }
 
-    if prevalent and surface_m2:
-        p_min = float(prevalent["price_min"]) if prevalent["price_min"] else 0
-        p_max = float(prevalent["price_max"]) if prevalent["price_max"] else 0
-        if p_min > 0 and p_max > 0:
-            avg = (p_min + p_max) / 2
-            estimate = {
-                "min": round(p_min * surface_m2, 2),
-                "max": round(p_max * surface_m2, 2),
-                "mid": round(avg * surface_m2, 2),
-                "eur_per_m2_range": [p_min, p_max],
-            }
-
-    return {
+    result = {
         "address": address,
         "coordinates": {"lat": coords.lat, "lng": coords.lng},
-        "zone": {
-            "link_zona": zone.link_zona,
-            "zone_code": zone.zone_code,
-            "fascia": zone.fascia,
-            "municipality": zone.municipality_name,
-            "description": zone.zone_description,
-            "distance_m": zone.distance_m,
-        },
+        "location": _location(coords, zone),
+        "zone": _zone_info(zone),
         "semester": semester,
-        "quotations": quotations,
+        "quotations": jsonable_rows(quotations),
         "estimate": estimate,
-        "comparables": comparables,
+        "comparables": jsonable_rows(comparables),
     }
+    if chosen is None:
+        result["no_data"] = NO_DATA
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -169,49 +208,51 @@ async def enhanced_valuate_address(
     coords, zone, semester = await geocode_and_find_zone(address, semester, db)
 
     quotations = await get_quotations(zone.link_zona, semester, property_type, db)
-    comparables = await get_comparables(zone.link_zona, zone.zone_code, db)
+    comparables = await get_comparables(zone.link_zona, db)
 
-    if not quotations:
-        raise ValueError(
-            f"No quotation data for zone {zone.link_zona} in semester {semester} "
-            f"for property type {property_type}"
-        )
-
-    # Group quotations by conservation state
+    # Group usable quotations by conservation state (exact Decimal ranges).
+    ranges_by_state: dict[str, tuple[Decimal, Decimal]] = {}
     quotations_by_state: dict[str, dict] = {}
     for q in quotations:
-        state = q.get("conservation_state", "SCONOSCIUTO")
-        if state and q.get("price_min") and q.get("price_max"):
-            quotations_by_state[state] = {
-                "price_min": float(q["price_min"]),
-                "price_max": float(q["price_max"]),
-                "is_prevalent": q.get("is_prevalent", False),
-                "surface_type_sale": q.get("surface_type_sale"),
-            }
+        state = q.get("conservation_state") or "SCONOSCIUTO"
+        usable = usable_range(q.get("price_min"), q.get("price_max"))
+        if usable is None:
+            continue
+        ranges_by_state[state] = usable
+        quotations_by_state[state] = {
+            "price_min": money(usable[0]),
+            "price_max": money(usable[1]),
+            "is_prevalent": bool(q.get("is_prevalent")),
+            "surface_type_sale": q.get("surface_type_sale"),
+        }
 
-    # Select the base OMI range for the user-chosen conservation state
+    if not ranges_by_state:
+        return {
+            "address": address,
+            "coordinates": {"lat": coords.lat, "lng": coords.lng},
+            "location": _location(coords, zone),
+            "zone": _zone_info(zone),
+            "semester": semester,
+            "no_data": NO_DATA,
+            "comparables": jsonable_rows(comparables),
+        }
+
+    # Select the base OMI range for the user-chosen conservation state,
+    # falling back to the prevalent state, then to the first usable one.
     selected_state = property_details.get("conservation_state", "NORMALE")
-    base = quotations_by_state.get(selected_state)
-
-    if not base:
-        # Fallback: use prevalent, or first available state
+    if selected_state not in ranges_by_state:
         prevalent_state = next(
             (s for s, v in quotations_by_state.items() if v.get("is_prevalent")),
             None,
         )
-        if prevalent_state:
-            base = quotations_by_state[prevalent_state]
-            selected_state = prevalent_state
-        else:
-            first_state = next(iter(quotations_by_state))
-            base = quotations_by_state[first_state]
-            selected_state = first_state
+        selected_state = prevalent_state or next(iter(ranges_by_state))
+    base_min, base_max = ranges_by_state[selected_state]
 
     # Apply correction coefficients
     details_for_engine = {k: v for k, v in property_details.items() if k != "conservation_state"}
     adjusted = compute_adjusted_estimate(
-        omi_price_min=base["price_min"],
-        omi_price_max=base["price_max"],
+        omi_price_min=base_min,
+        omi_price_max=base_max,
         surface_m2=surface_m2,
         property_details=details_for_engine,
     )
@@ -224,14 +265,8 @@ async def enhanced_valuate_address(
     return {
         "address": address,
         "coordinates": {"lat": coords.lat, "lng": coords.lng},
-        "zone": {
-            "link_zona": zone.link_zona,
-            "zone_code": zone.zone_code,
-            "fascia": zone.fascia,
-            "municipality": zone.municipality_name,
-            "description": zone.zone_description,
-            "distance_m": zone.distance_m,
-        },
+        "location": _location(coords, zone),
+        "zone": _zone_info(zone),
         "semester": semester,
         "quotations_by_state": quotations_by_state,
         "adjusted_estimate": {
@@ -265,5 +300,5 @@ async def enhanced_valuate_address(
                 "note": benchmark.note,
             } if benchmark else None,
         },
-        "comparables": comparables,
+        "comparables": jsonable_rows(comparables),
     }

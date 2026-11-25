@@ -19,10 +19,18 @@ from app.refusals import refusal
 from app.services import spending
 from app.services.coefficients import get_coefficient_options
 from app.services.pricing import actual_call_cost_micro, max_call_cost_micro
+from app.services.numbers import jsonable_rows
+from app.services.tool_inputs import (
+    DETAIL_FIELDS,
+    CoefficientInfoInput,
+    EnhancedValuatePropertyInput,
+    ValuatePropertyInput,
+    ZoneQuotationsInput,
+    validate_tool_input,
+)
 from app.services.rate_limit import rate_limiter
 from app.services.valuation import (
     enhanced_valuate_address,
-    get_comparables,
     get_quotations,
     valuate_address,
 )
@@ -97,7 +105,7 @@ chiedere all'utente di riprovare. Agisci con intraprendenza:
 
 1. **Prova variazioni dell'indirizzo** (richiama `valuate_property` in autonomia):
    - Se l'utente ha scritto "Via Sottocorno" prova "Via Pasquale Sottocorno"
-   - Se ha scritto solo il nome senza numero civico, aggiungi un numero generico (es. "1")
+   - Se manca il numero civico, chiedilo. Non inventarlo mai: un civico inventato fa sembrare esatta una posizione approssimativa
    - Se ha scritto il nome completo con particella, prova senza (e viceversa)
    - Prova con e senza la virgola o il formato citta' (es. "Milano" vs "MI")
 2. **Se le variazioni falliscono**, usa `valuate_property` con un indirizzo \
@@ -535,46 +543,46 @@ TOOLS = [
 async def execute_tool(
     tool_name: str, tool_input: dict, db: AsyncSession
 ) -> dict:
-    """Execute a tool call against existing services and return the result."""
+    """Validate a tool call's arguments, then run it against existing services.
 
-    if tool_name == "valuate_property":
-        return await valuate_address(
-            address=tool_input["address"],
-            property_type=tool_input.get("property_type", 20),
-            surface_m2=tool_input.get("surface_m2"),
-            semester=tool_input.get("semester"),
-            db=db,
-        )
+    Raises ValueError for invalid arguments, unknown tools and expected
+    no-result outcomes; the agent loop turns those into tool errors.
+    """
+    args = validate_tool_input(tool_name, tool_input)
 
-    elif tool_name == "enhanced_valuate_property":
-        detail_keys = [
-            "conservation_state", "renovation", "floor", "exposure",
-            "noise", "common_areas", "building_facade", "energy_class", "elevator",
-        ]
-        details = {k: tool_input[k] for k in detail_keys if k in tool_input}
+    if isinstance(args, EnhancedValuatePropertyInput):
+        details = {k: getattr(args, k) for k in DETAIL_FIELDS if getattr(args, k) is not None}
         return await enhanced_valuate_address(
-            address=tool_input["address"],
-            property_type=tool_input.get("property_type", 20),
-            surface_m2=tool_input["surface_m2"],
-            semester=tool_input.get("semester"),
+            address=args.address,
+            property_type=args.property_type,
+            surface_m2=args.surface_m2,
+            semester=args.semester,
             property_details=details,
             db=db,
         )
 
-    elif tool_name == "get_coefficient_info":
-        return {"factors": get_coefficient_options()}
-
-    elif tool_name == "get_zone_quotations":
-        rows = await get_quotations(
-            link_zona=tool_input["link_zona"],
-            semester=tool_input["semester"],
-            property_type=tool_input.get("property_type", 20),
+    if isinstance(args, ValuatePropertyInput):
+        return await valuate_address(
+            address=args.address,
+            property_type=args.property_type,
+            surface_m2=args.surface_m2,
+            semester=args.semester,
             db=db,
         )
-        return {"quotations": rows}
 
-    else:
-        return {"error": f"Unknown tool: {tool_name}"}
+    if isinstance(args, CoefficientInfoInput):
+        return {"factors": get_coefficient_options()}
+
+    if isinstance(args, ZoneQuotationsInput):
+        rows = await get_quotations(
+            link_zona=args.link_zona,
+            semester=args.semester,
+            property_type=args.property_type,
+            db=db,
+        )
+        return {"quotations": jsonable_rows(rows)}
+
+    raise ValueError(f"Unknown tool: {tool_name}")
 
 
 # ---------------------------------------------------------------------------
@@ -732,6 +740,16 @@ async def run_agent_stream(
                         "type": "tool_result",
                         "tool_use_id": tool_block.id,
                         "content": _serialize({"error": str(exc)}),
+                        "is_error": True,
+                    })
+                except Exception:
+                    # An unexpected failure in a service must not break a stream
+                    # already in progress: the model gets a generic tool error.
+                    logger.exception("Tool %s failed", tool_block.name)
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": tool_block.id,
+                        "content": _serialize({"error": "Internal error while running the tool"}),
                         "is_error": True,
                     })
 
