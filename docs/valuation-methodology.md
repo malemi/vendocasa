@@ -7,7 +7,7 @@ Address Input
      |
      v
 [1] Geocoding
-     Address -> (latitude, longitude)
+     Address -> (latitude, longitude), precision: exact or approximate
      |
      v
 [2] Zone Identification
@@ -22,8 +22,8 @@ Address Input
      Price range * surface area -> total value estimate
      |
      v
-[5] Enhanced Estimate (Coefficient Wizard)
-     User provides property-specific details
+[5] Enhanced Estimate
+     The chat agent collects property-specific details
      -> correction coefficients applied
      -> adjusted EUR/m2 range
      |
@@ -58,6 +58,8 @@ For a given address, property type, and surface area:
    - **Minimum:** price_min * surface_m2
    - **Maximum:** price_max * surface_m2
    - **Midpoint:** (price_min + price_max) / 2 * surface_m2
+
+Arithmetic is exact (Decimal), and amounts are rounded half up to cents only in the output. A quotation range is unusable when it is missing, not positive, reversed (min above max) or not a number. When the zone has no usable range for the property type and semester, the result carries an explicit `no_data` message instead of an estimate.
 
 Example:
 - Zone B01, Abitazioni civili, NORMALE (prevalent)
@@ -131,9 +133,13 @@ The basic estimate uses zone averages, which can significantly undervalue (or ov
 - **Alternative approach**: Use 4th floor benchmark (8,536 EUR/m2), adjust -1% floor + 2% silence = 8,620 EUR/m2
 - **Total estimate**: ~535,000 EUR
 
+## Location Precision
+
+A geocoder result is `exact` only for a building-level match: a house number in Photon or Nominatim, or `ROOFTOP` in Google. When the result is approximate, or when the address falls outside every zone and the nearest zone within 200 m is used, the valuation card tells the user in Italian. The agent asks for a missing house number instead of inventing one, because an invented number would make an approximate location look exact.
+
 ## Benchmark Comparison
 
-When real transactions exist in the same zone (from the manually entered `omi.transactions` table), the system compares the adjusted EUR/m2 estimate with actual sale prices:
+When real transactions exist in the same zone (from the manually entered `omi.transactions` table, matched on the zone's exact `link_zona`), the system compares the adjusted EUR/m2 estimate with actual sale prices:
 
 - **High confidence** (within 5%): adjusted estimate closely matches real data
 - **Medium confidence** (5-15%): reasonable deviation, review coefficients
@@ -149,7 +155,7 @@ Most residential quotations use L (gross). When the user enters surface_m2, they
 
 ## Comparable Transactions
 
-Manually entered transaction data from the Agenzia's "Valori Dichiarati" viewer provides actual sale prices. These are used to:
+Manually entered transaction data from the Agenzia's "Valori Dichiarati" viewer provides actual sale prices. Only the owner account can enter or change the records. A record is a comparable only when its `link_zona` equals the zone's. Zone codes such as `B01` repeat across municipalities, so records without a `link_zona` are not used. Where a record has vani but no m2, its surface is estimated at 17 m2 per vano. The records are used to:
 
 - Cross-check whether the OMI range is realistic for the specific zone
 - Calculate actual EUR/m2 from declared prices (price / cadastral m2 or estimated from vani)

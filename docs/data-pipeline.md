@@ -3,14 +3,14 @@
 ## Data Directory Layout
 
 ```
-./data/
+backend/data/                           # DATA_DIR: ./data, relative to backend/
 +-- QIP1337269_LMAMRA70L29F839Z.zip    # Each zip contains:
 +-- QIP1337270_LMAMRA70L29F839Z.zip    #   - 2 CSVs (VALORI + ZONE)
 +-- ...                                 #   - ~7,900 KML files (one per municipality)
 +-- QIP1337298_LMAMRA70L29F839Z.zip
 ```
 
-25 zip files covering 23 semesters from 2010_S2 to 2025_S1, total ~2.4 GB. Some semesters appear in multiple zips (duplicates with identical data -- handled via UNIQUE constraints).
+25 zip files covering 23 semesters from 2010_S2 to 2025_S1, total ~2.4 GB. Some semesters appear in more than one zip. Archives with identical content are imported once; if a semester's archives differ, that semester fails and is not imported (`scripts/import_omi.py`).
 
 ## Zip File Naming
 
@@ -27,8 +27,11 @@ The unified import script (`backend/scripts/import_omi.py`) orchestrates the ent
 ```bash
 cd backend
 python -m scripts.import_omi           # reads DATA_DIR and DATABASE_URL from .env
-python -m scripts.import_omi --reset   # drop and recreate all OMI tables first
+python -m scripts.import_omi --reset   # empty OMI zones, quotations and completion records first
+python -m scripts.validate_semesters   # read-only report on the loaded semesters
 ```
+
+The script first brings the schema up to date with the Alembic migrations. `--reset` empties `omi.zones`, `omi.quotations` and `omi.semester_import` in one transaction. It never drops the schema, `omi.transactions` or anything in the `app` schema.
 
 ```
 discover_and_import_all(DATA_DIR, DATABASE_URL)
@@ -46,25 +49,32 @@ discover_and_import_all(DATA_DIR, DATABASE_URL)
     |       Pattern: QI_[YYYY][S]_VALORI.csv
     |       Result: "YYYY_S1" or "YYYY_S2"
     |
-    +-- 4. Check idempotency: skip if semester exists in BOTH omi.zones AND omi.quotations
+    +-- 4. Skip semesters recorded complete in omi.semester_import
+    |       A semester found in several archives with different contents is not imported
     |
-    +-- 5. Import ZONE CSV first
-    |       (builds a lookup dict for KML -> LinkZona resolution)
+    +-- 5. Parse, before touching the database:
+    |       ZONE CSV -> lookup dict for KML -> LinkZona resolution
+    |       KML polygons (3 formats, see below) -> zone rows with their source file
+    |       VALORI CSV -> cleaned COPY text
     |
-    +-- 6. Import KML polygons (handles 3 different formats, see below)
-    |       Parse each KML with lxml
-    |       Build Shapely geometry
-    |       Insert into omi.zones via batch INSERT with SAVEPOINTs
-    |       Geometry safety: ST_Multi(ST_CollectionExtract(ST_MakeValid(...), 3))
+    +-- 6. ONE transaction per semester:
+    |       advisory lock on the semester
+    |       delete the semester's zones, quotations and completion record
+    |       insert the zones (each row in a savepoint; any rejected row fails the semester)
+    |       COPY the quotations (any error fails the semester)
+    |       write the completion record: counts, quotations without a zone, archive SHA-256
+    |       A failure rolls everything back; the previous data stays current
     |
-    +-- 7. Import VALORI CSV via PostgreSQL COPY FROM STDIN
-    |       Clean data (decimal separators, encoding, types)
-    |       Deduplicate on UNIQUE key
-    |       Pre-delete existing rows for the semester (safe retry)
-    |       Bulk-load via psycopg3 COPY protocol
-    |
-    +-- 8. Post-import: VACUUM ANALYZE
+    +-- 7. Post-import: VACUUM ANALYZE
 ```
+
+A failed semester is logged with its reason, and every rejected zone row with its file, zone and error. The script exits with status 1 when any semester failed.
+
+## Completion records
+
+`omi.semester_import` holds one row per complete semester. The API, the agent tools and `/api/semesters` use only these semesters, explicitly requested ones included.
+
+Some zones in the quotation CSVs have no KML perimeter. Their quotations are legitimate and are counted as `quotations_without_zone`, not failed. Migration 0005 backfilled records for the semesters loaded before it existed. A loaded semester passes when it has zones and quotations and every geometry is valid. For those semesters, `quotations_without_zone` also counts zone rows that the old importer lost after an insert error; a re-import from the archive tells the two apart. `scripts/validate_semesters.py` prints the same report read-only, and exits with status 1 when the latest loaded semester fails.
 
 ## Semester Detection
 
@@ -109,15 +119,14 @@ Steps:
 1. Delete any existing rows for the semester (safe re-import on retry)
 2. Deduplicate DataFrame on UNIQUE key `(link_zona, semester, property_type_code, conservation_state)`
 3. Serialize to TSV in a `StringIO` buffer with `\N` as NULL representation
-4. Stream to PostgreSQL via `cursor.copy("COPY ... FROM STDIN")`
+4. Write the prepared text to PostgreSQL with one `cursor.copy("COPY ... FROM STDIN")`, inside the semester's transaction
 
 ```python
 buf = io.StringIO()
 output.to_csv(buf, sep="\t", header=False, index=False, na_rep="\\N")
-buf.seek(0)
+copy_text = buf.getvalue()
 with cursor.copy("COPY omi.quotations (...) FROM STDIN") as copy:
-    while data := buf.read(8192):
-        copy.write(data.encode("utf-8"))
+    copy.write(copy_text.encode("utf-8"))
 ```
 
 ## Three KML Formats
@@ -160,9 +169,9 @@ Resolution: look up `(CODCOM, CODZONA)` in the ZONE CSV to get `LinkZona`.
 
 Each KML Placemark contains one or more `<Polygon>` elements (possibly wrapped in `<MultiGeometry>`):
 
-1. Parse `<coordinates>` text: `lng,lat,alt` triplets separated by whitespace
-2. Build Shapely `Polygon` objects, ensuring ring closure
-3. Combine into a `MultiPolygon`
+1. For each `<Polygon>`, the `outerBoundaryIs` ring is the shell and every `innerBoundaryIs` ring is a hole. Coordinates are `lng,lat,alt` triplets; rings are closed when needed.
+2. Build one Shapely `Polygon(shell, holes)` per `<Polygon>`.
+3. Combine the polygons of the placemark into a `MultiPolygon`.
 4. On INSERT, wrap with PostGIS safety functions:
    ```sql
    ST_Multi(ST_CollectionExtract(ST_MakeValid(ST_GeomFromText(:wkt, 4326)), 3))
@@ -179,26 +188,15 @@ Some KMLs (notably Bolzano/South Tyrol municipalities with German characters) co
 2. Attempts `etree.fromstring(raw_bytes)` (lxml auto-detects encoding)
 3. On `XMLSyntaxError`, decodes as UTF-8 with `errors="replace"` and re-parses
 
-## Zone Batch Insert with SAVEPOINTs
+## Zone Insert with Savepoints
 
-Zones are inserted in batches of 500 using SAVEPOINTs for error isolation. If one row fails (e.g. invalid geometry), the SAVEPOINT is rolled back and the batch continues without aborting the entire transaction.
-
-```python
-for row in batch:
-    conn.execute(text("SAVEPOINT sp"))
-    try:
-        conn.execute(text("INSERT INTO omi.zones ..."), row)
-        conn.execute(text("RELEASE SAVEPOINT sp"))
-    except Exception:
-        conn.execute(text("ROLLBACK TO SAVEPOINT sp"))
-```
+Inside the semester's transaction, each zone row is inserted in its own savepoint (`insert_zone_rows`). A failing row is rolled back and recorded, so every rejected row is reported at once. Any rejection then fails, and rolls back, the whole semester.
 
 ## Idempotency
 
-- **Semester check**: before importing, check if the semester exists in **both** `omi.zones` AND `omi.quotations`. A semester is considered imported only if it appears in both tables.
-- **Quotations**: pre-delete all rows for the semester before COPY (safe retry on failure).
-- **Zones**: `ON CONFLICT (link_zona, semester) DO NOTHING` skips duplicates.
-- **Duplicate zips**: some semesters appear in multiple zip files; only the first zip is processed.
+- **Semester check**: a semester is imported when it has no completion record.
+- **Replacement**: the semester's existing zones, quotations and record are deleted in the same transaction that writes the new ones, so a retry never duplicates.
+- **Duplicate zips**: a semester found in several archives is imported only when the archives are byte-identical (same SHA-256).
 
 ## Post-Import
 
@@ -225,5 +223,5 @@ Every 6 months when new OMI data is published:
 2. Download the new semester's zip file
 3. Drop it into the data directory (configured via `DATA_DIR` in `.env`)
 4. Run: `cd backend && python -m scripts.import_omi`
-5. The script detects the new semester and imports only new data (existing semesters are skipped)
-6. The frontend automatically picks up the new semester via the `/api/semesters` endpoint
+5. The script imports semesters that have no completion record, and skips complete ones
+6. The new semester becomes the latest complete one for valuations once its transaction commits

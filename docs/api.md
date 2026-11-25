@@ -3,262 +3,206 @@
 ## Base URL
 
 - Local development: `http://localhost:8000`
-- Production: `https://vendocasa-backend.railway.app` (or configured domain)
+- Production: the Railway backend URL, which the frontend reads from `VITE_API_URL`.
+
+## Authentication
+
+Every route under `/api/` except `GET /api/health` requires a signed-in account:
+
+```
+Authorization: Bearer <Supabase Auth access token>
+```
+
+The frontend obtains the token through Supabase Auth email sign-in links (`@supabase/supabase-js`). The backend verifies it before reading the request body (`backend/app/auth.py`):
+- signature, expiry, issuer `<SUPABASE_URL>/auth/v1` and audience `authenticated`;
+- the algorithm from `SUPABASE_JWT_ALGORITHM`, never from the token header, using the project's JWKS or the HS256 secret;
+- not an anonymous user;
+- an email whose domain is not on the disposable-domain list.
+
+Cookies, CORS and forwarding headers grant nothing.
+
+The **owner** is the account whose token subject equals `OWNER_USER_ID`. Only the owner may write transaction records and use the `/api/admin/` routes.
 
 ## CORS
 
-Configured via `CORS_ORIGINS` environment variable (comma-separated origins).
+Configured through `CORS_ORIGINS` (comma-separated origins). Credentials (cookies) are not used. Refusals carry CORS headers, so the browser can read them.
+
+## Refusals
+
+A refused request returns:
+
+```json
+{"detail": {"error": "<code>", "message": "<Italian message for the user>"}}
+```
+
+The codes and messages are in `backend/app/refusals.py`. The frontend shows `message`.
+
+The other errors send `detail` as a plain string:
+- **In Italian.** Six input checks answer `400`:
+  - in `POST /api/chat`: a message longer than `AGENT_MAX_MESSAGE_CHARS`, more than 4 documents in one message, and attachments over `AGENT_MAX_ATTACHMENT_BYTES`;
+  - in `POST /api/documents/upload`: an unsupported file type, a file that is not a valid PDF, and an empty or corrupt image.
+- **In English.** These answer in English:
+  - an invalid `bbox` (`400`);
+  - an owner's transaction update with no fields (`400`);
+  - every `404`: an address, zone, semester or transaction that is not found.
+
+The frontend shows a plain-string detail as it is.
+
+| Code | Status | When |
+|------|--------|------|
+| `not_authenticated` | 401 | No bearer token |
+| `session_expired` | 401 | The token has expired |
+| `invalid_token` | 401 | Bad signature, issuer, audience or claims, or an anonymous user |
+| `disposable_email` | 403 | The account's email domain is a disposable-address domain |
+| `auth_unavailable` | 503 | Identity configuration or the domain list is unavailable |
+| `owner_only` | 403 | An owner-only route called by another account |
+| `rate_limited` | 429 | A per-account or per-IP request limit; `Retry-After` gives the seconds to wait |
+| `daily_limit` | 503 | The service-wide daily model-call ceiling |
+| `account_limit` | 429 | The account's monthly allowance is used up |
+| `global_limit` | 503 | The service's monthly allowance is used up |
+| `paused` | 503 | The owner has turned paid calls off |
+| `assistant_unavailable` | 503 | The spending ledger or the model provider failed |
+| `concurrent` | 429 | The account already has an active chat stream |
+| `too_large` | 413 | The request body or the file is over its limit |
+| `account_uploads_full` | 429 | The account's stored uploads are at their byte cap |
+| `uploads_full` | 503 | All stored uploads are at the total byte cap |
+| `document_expired` | 400 | A referenced document is missing, expired or not the account's own; the three cases look the same |
+| `history_limit` | 400 | The conversation is over `AGENT_MAX_HISTORY_MESSAGES` messages |
+| `model_refusal` | — | Sent as an SSE `error` event when the model declines |
+
+Request bodies are limited before parsing (`backend/app/middleware.py`): 1 MiB for `/api/chat`, 6 MiB for `/api/documents/upload`, 64 KiB elsewhere. Validation errors keep FastAPI's `422` format. A refused non-finite number (`NaN`, `Infinity`) is echoed in `input` as a string, because it is not valid JSON.
+
+## Spending caps
+
+Every paid provider call is charged to the requesting account, in a PostgreSQL ledger (`backend/app/services/spending.py`). Paid calls are model calls, and Google geocoding when its key is configured.
+
+- **Caps.** Each account may spend `ACCOUNT_MONTHLY_CAP_USD`, default $1, and the whole service `GLOBAL_MONTHLY_CAP_USD`, default $100, per calendar month in UTC.
+- **Reserve.** Before each call its maximum cost is reserved against both caps. A call that would exceed either cap is refused before it starts.
+- **Settle.** The actual cost is recorded afterwards. If the outcome is unknown (error, timeout, cancellation), the full reservation is charged.
+- **Switch.** Paid calls start switched off. The owner turns them on through `PUT /api/admin/paid-calls`.
+- **Overrun.** If a call's actual cost exceeds its reservation, the price table or the token count is wrong. The cost is still recorded in full, and paid calls are switched off until the owner turns them on again. If switching them off fails, the error is logged and paid calls stay on.
 
 ## Endpoints
 
 ### POST /api/chat
 
-AI conversational agent via Server-Sent Events (SSE). The backend orchestrates Claude Sonnet 4 with programmatic tool calling to perform valuations through natural conversation.
+The conversational valuation agent, streamed as Server-Sent Events. The backend runs Claude (`ANTHROPIC_MODEL`, default `claude-sonnet-5-5`) with server-side tool calls.
 
-**Request Body:**
+**Request body:**
 ```json
 {
   "messages": [
-    {"role": "user", "content": "Valuta Via Sottocorno 17, Milano, 62mq"}
+    {"role": "user", "content": "Valuta Via Sottocorno 17, Milano, 62mq", "document_ids": ["<uuid>"]}
   ]
 }
 ```
 
-Messages follow the standard `role`/`content` format. Send the full conversation history with each request (the backend is stateless). The history is capped at `AGENT_MAX_HISTORY_MESSAGES` messages (default 20) of up to `AGENT_MAX_MESSAGE_CHARS` characters each (default 4000); a request exceeding either returns `400`.
+- **Roles and history.** Roles are `user` or `assistant`; anything else is refused with `422`. Send the full conversation each time, because the backend is stateless.
+- **Bounds.** The history holds at most `AGENT_MAX_HISTORY_MESSAGES` messages, default 50. Each message holds at most `AGENT_MAX_MESSAGE_CHARS` characters, default 4000.
+- **Documents.** `document_ids` refers to the account's own uploads, and the total size of attachments in one request is at most `AGENT_MAX_ATTACHMENT_BYTES`, default 15 MB.
+- **Limits.** The route applies per-account and per-IP request limits, the global daily model-call ceiling, the monthly spending caps and the paid-call switch. One active stream per account.
 
-The endpoint is rate-limited per identity (the `vendocasa_uid` cookie and
-the client IP, checked independently) and by a global daily ceiling on
-Anthropic model calls -- see **Errors** below and `docs/deployment.md` for
-the environment variables and defaults.
-
-**Response:** `text/event-stream` (SSE)
+**Response:** `text/event-stream`
 
 ```
 event: text_delta
 data: {"text": "Ciao! Cerco subito "}
 
-event: text_delta
-data: {"text": "informazioni sulla zona..."}
-
 event: tool_result
-data: {"tool": "valuate_property", "result": {"zone": {...}, "estimate": {...}, "coordinates": {...}}}
-
-event: map_update
-data: {"lat": 45.464, "lng": 9.190}
-
-event: text_delta
-data: {"text": "L'immobile si trova in zona C20..."}
+data: {"tool": "valuate_property", "result": {"zone": {...}, "location": {...}, "estimate": {...}}}
 
 event: done
 data: {}
 ```
 
-**SSE Event Types:**
-
 | Event | Data | Purpose |
 |-------|------|---------|
-| `text_delta` | `{"text": "..."}` | Streamed text token |
-| `tool_result` | `{"tool": "...", "result": {...}}` | Structured valuation data (rendered as inline cards in the chat) |
-| `map_update` | `{"lat": ..., "lng": ...}` | Coordinates for map flyTo |
+| `text_delta` | `{"text": "..."}` | Streamed text |
+| `tool_result` | `{"tool": "...", "result": {...}}` | Structured valuation data, rendered as inline cards |
+| `error` | `{"error": "<code>", "message": "..."}` | A refusal or failure during the stream, for example `account_limit`, `daily_limit`, `model_refusal` or `assistant_unavailable` |
 | `done` | `{}` | Stream complete |
-| `error` | `{"message": "..."}` | Error occurred |
 
-**Errors:**
-- `400` -- conversation history or a single message exceeds the configured cap
-- `400` -- total attachment bytes across the request exceed `AGENT_MAX_ATTACHMENT_BYTES`
-- `429` -- per-identity rate limit exceeded (per-minute or per-day). Body:
-  `{"detail": {"error": "rate_limited", "message": "..."}}`, with a
-  `Retry-After` header giving the number of seconds to wait
-- `503` -- the service-wide daily model-call ceiling has been reached. Body:
-  `{"detail": {"error": "service_unavailable", "message": "..."}}`
+Provider error details never reach the client.
 
-A missing `ANTHROPIC_API_KEY` is a startup failure, not a per-request
-error -- the backend does not accept traffic without one configured.
+### POST /api/documents/upload
 
----
+Uploads a PDF or image (JPEG, PNG, WEBP, GIF) for use in chat and returns its ID.
+
+- **Size and lifetime.** At most 5 MB. The file stays in the backend's memory for 30 minutes, and a restart deletes it.
+- **Ownership.** The document belongs to the uploading account, and no other account can use it.
+- **Caps.** Stored uploads are capped at 20 MiB per account and 200 MiB in total.
+- **Limits.** The route shares the chat route's request limits.
+
+**Response:** `{"doc_id": "...", "filename": "...", "size": 1234, "media_type": "application/pdf"}`
 
 ### GET /api/valuate
 
-Main valuation endpoint. Geocodes an address, finds its OMI zone, and returns price data.
-
-**Query Parameters:**
+Geocodes an address, finds its OMI zone and returns price data. The route applies the chat-level request limits, because it reaches the public geocoders.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| address | string | yes | | Italian address to valuate |
-| property_type | int | no | 20 | Property type code (20=Abitazioni civili) |
-| surface_m2 | float | no | null | Surface area; if provided, calculates total estimate |
-| semester | string | no | latest | Semester to query (e.g. "2024_S2") |
+| address | string | yes | | Italian address |
+| property_type | int | no | 20 | Property type code (20 = Abitazioni civili) |
+| surface_m2 | float | no | | Surface; when given, the total estimate is computed. Finite, above 0 and at most 100,000, or `422` |
+| semester | string | no | latest complete | A semester recorded complete, e.g. "2024_S2" |
 
 **Response:**
 ```json
 {
   "address": "Via Roma 1, Milano",
   "coordinates": {"lat": 45.464, "lng": 9.190},
-  "zone": {
-    "link_zona": "MI00000290",
-    "zone_code": "B01",
-    "fascia": "B",
-    "municipality": "MILANO",
-    "description": "CENTRO STORICO"
-  },
+  "location": {"precision": "exact", "source": "photon", "matched_address": "...", "zone_distance_m": null, "approximate": false},
+  "zone": {"link_zona": "MI00000290", "zone_code": "B01", "fascia": "B", "municipality": "MILANO", "description": "CENTRO STORICO", "distance_m": null},
   "semester": "2024_S2",
-  "quotations": [
-    {
-      "property_type_desc": "Abitazioni civili",
-      "conservation_state": "NORMALE",
-      "is_prevalent": true,
-      "price_min": 3800.0,
-      "price_max": 5200.0,
-      "surface_type_sale": "L",
-      "rent_min": 14.0,
-      "rent_max": 21.0,
-      "surface_type_rent": "L"
-    }
-  ],
-  "estimate": {
-    "min": 304000.0,
-    "max": 416000.0,
-    "mid": 360000.0,
-    "eur_per_m2_range": [3800.0, 5200.0]
-  },
+  "quotations": [{"conservation_state": "NORMALE", "is_prevalent": true, "price_min": 3800.0, "price_max": 5200.0, "surface_type_sale": "L", "...": "..."}],
+  "estimate": {"min": 304000.0, "max": 416000.0, "mid": 360000.0, "eur_per_m2_range": [3800.0, 5200.0]},
   "comparables": []
 }
 ```
 
-**Errors:**
-- `404` -- address not found by geocoder
-- `404` -- no OMI zone found for location (not even within 200m fallback)
-
----
+- **Location.** `location.approximate` is true when the geocoder did not report a building-level match, or when the nearest zone within 200 m replaced an exact zone match.
+- **No data.** When the zone has no usable quotation range (missing, non-positive, reversed or NaN), `estimate` is null and `no_data` explains it: `{"reason": "no_usable_quotation", "message": "..."}`.
+- **Comparables.** They are transaction records with the zone's exact `link_zona`.
+- **Errors.** `404` when the address, the zone or the semester is not found.
 
 ### POST /api/valuate/enhanced
 
-Enhanced valuation with correction coefficients. Takes property-specific details and applies Italian appraisal methodology adjustments to the OMI base range.
+Applies correction coefficients to the OMI range of the selected conservation state, and compares the result with comparables. The request body is unchanged:
+- `address`, `surface_m2` (finite, above 0 and at most 100,000, or `422`), `property_type` and `semester`;
+- `details` with `conservation_state`, `renovation`, `floor`, `exposure`, `noise`, `elevator`, `common_areas`, `building_facade` and `energy_class`.
 
-**Request Body:**
-```json
-{
-  "address": "Via Sottocorno 17, Milano",
-  "surface_m2": 62,
-  "property_type": 20,
-  "semester": null,
-  "details": {
-    "conservation_state": "OTTIMO",
-    "renovation": "premium_post_2015",
-    "floor": "third_fourth",
-    "exposure": "south_dual",
-    "noise": "very_silent",
-    "elevator": "present",
-    "common_areas": "needs_maintenance",
-    "facade": "good",
-    "energy_class": "c_d"
-  }
-}
-```
+The response has the following parts:
+- `location`, `zone` and `semester`;
+- `quotations_by_state`;
+- `adjusted_estimate`, which holds the base and adjusted EUR/m2 values, the totals, `total_coefficient`, `breakdown` and `benchmark_comparison`;
+- `comparables`.
 
-**Response:**
-```json
-{
-  "base_estimate": {
-    "min": 403000,
-    "max": 551800,
-    "mid": 477400,
-    "eur_per_m2_range": [6500, 8900]
-  },
-  "adjusted_estimate": {
-    "min": 487630,
-    "max": 667678,
-    "mid": 577654,
-    "eur_per_m2_range": [7865, 10769]
-  },
-  "total_coefficient": 0.21,
-  "coefficients_applied": [
-    {"factor": "renovation", "option": "premium_post_2015", "value": 0.10},
-    {"factor": "floor", "option": "third_fourth", "value": 0.05},
-    {"factor": "exposure", "option": "south_dual", "value": 0.05},
-    {"factor": "noise", "option": "very_silent", "value": 0.03},
-    {"factor": "common_areas", "option": "needs_maintenance", "value": -0.02}
-  ],
-  "zone": { "..." },
-  "coordinates": {"lat": 45.464, "lng": 9.190}
-}
-```
-
----
+All amounts are rounded to cents. When no usable range exists, the response carries `no_data` and no `adjusted_estimate`. The route applies the same request limits as `GET /api/valuate`.
 
 ### GET /api/coefficients
 
-Returns all available correction coefficient factors and options. Used by the frontend to dynamically build the property details form.
-
-**Response:**
-```json
-{
-  "factors": {
-    "renovation": {
-      "label": "Ristrutturazione",
-      "label_en": "Renovation",
-      "options": [
-        {"key": "premium_post_2015", "label": "Ristrutturazione integrale post-2015", "label_en": "Premium renovation post-2015", "pct": 0.10},
-        {"key": "standard_recent", "label": "Ristrutturazione parziale/recente", "label_en": "Standard/recent renovation", "pct": 0.05},
-        {"key": "none", "label": "Nessuna ristrutturazione", "label_en": "No renovation", "pct": 0.0},
-        {"key": "needs_work", "label": "Da ristrutturare", "label_en": "Needs renovation", "pct": -0.10}
-      ]
-    },
-    ...
-  }
-}
-```
-
----
+All correction coefficient factors and options. The list is static, so the route has the per-account route quota, not the chat-level limits.
 
 ### GET /api/zones/geojson
 
-Returns zone polygons as GeoJSON for map display.
-
-**Query Parameters:**
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| bbox | string | no | | Bounding box: "min_lng,min_lat,max_lng,max_lat" |
-| semester | string | no | latest | Semester |
-
-**Response:** GeoJSON FeatureCollection with zone properties and average price data.
-
----
+Zone polygons as a GeoJSON FeatureCollection. `bbox` (`min_lng,min_lat,max_lng,max_lat`) is required. At most 500 zones are returned, ordered by `link_zona`. `semester` defaults to the latest complete one.
 
 ### GET /api/zones/by-coordinates
 
-Look up zone info for a specific point.
-
-**Query Parameters:**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| lat | float | yes | Latitude |
-| lng | float | yes | Longitude |
-| semester | string | no | Semester (defaults to latest) |
-
----
+The zone at a point (`lat`, `lng`, optional `semester`).
 
 ### GET /api/quotations
 
-Quotations for a specific zone.
+Quotations for a zone (`link_zona`, optional `semester`), at most 200 rows.
 
-**Query Parameters:**
+### GET /api/transactions
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| link_zona | string | yes | Zone identifier |
-| semester | string | no | Defaults to latest |
+Transaction records, newest first, one page at a time: `limit` (default 50, at most 100) and `offset`. Optional filters: `link_zona` and `municipality`.
 
----
+### POST /api/transactions, PUT /api/transactions/{id}, DELETE /api/transactions/{id}
 
-### POST /api/transactions
+Create, update and delete transaction records. **Owner only.** The create body:
 
-Create a manually entered transaction record.
-
-**Request Body:**
 ```json
 {
   "transaction_date": "2024-06-01",
@@ -275,79 +219,29 @@ Create a manually entered transaction record.
 }
 ```
 
----
-
-### GET /api/transactions
-
-List transactions, optionally filtered.
-
-**Query Parameters:**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| link_zona | string | no | Filter by zone |
-| municipality | string | no | Filter by municipality |
-
----
-
-### PUT /api/transactions/{id}
-
-Update a transaction record.
-
----
-
-### DELETE /api/transactions/{id}
-
-Delete a transaction record.
-
----
+Records without a `link_zona` are never used as comparables.
 
 ### GET /api/semesters
 
-List all available data periods.
+The semesters whose import is recorded complete, newest first: `{"semesters": [...], "latest": "2024_S2"}`.
 
-**Response:**
-```json
-{
-  "semesters": ["2024_S2", "2024_S1", "2023_S2", "..."],
-  "latest": "2024_S2"
-}
-```
+### GET /api/admin/spending
 
----
+**Owner only.** The current month's spending in US dollars: the global total, each account's spending and reservations, the caps and the paid-call switch.
+
+### PUT /api/admin/paid-calls
+
+**Owner only.** Body `{"enabled": true}`. Turns paid provider calls on or off; the rest of the site keeps working.
 
 ### GET /api/health
 
-Health check endpoint (used by Railway for deployment monitoring).
+Public liveness check: `{"status": "ok"}`.
 
-**Response:**
-```json
-{"status": "ok"}
-```
+## Geocoding
 
----
+The geocoder tries the following, in order:
+1. Photon, the primary.
+2. Nominatim.
+3. Google Geocoding, only when `GOOGLE_GEOCODING_API_KEY` is set. Each Google request is reserved and charged to the requesting account at its price, whatever the result.
 
-## Geocoding Strategy
-
-1. **Nominatim** -- free, 1 request/second rate limit, results cacheable permanently (ODbL)
-2. **Google Geocoding API** -- fallback, 10k free requests/month, requires API key
-
-Note: There is currently **no database cache table** (`omi.geocode_cache` does not exist). Geocoding results are not persisted between requests.
-
----
-
-## Error Responses
-
-All errors follow the format:
-```json
-{
-  "detail": "Human-readable error message"
-}
-```
-
-Common error codes:
-- `404` -- resource not found (address, zone, transaction)
-- `422` -- validation error (invalid parameters)
-- `429` -- rate limit exceeded on `/api/chat` or `/api/documents/upload` (`detail.error: "rate_limited"`, `Retry-After` header) -- both share the same per-identity budget
-- `500` -- internal server error
-- `503` -- `/api/chat` global daily model-call ceiling reached (`detail.error: "service_unavailable"`)
+A result is `exact` only for a building-level match. Results are not cached.

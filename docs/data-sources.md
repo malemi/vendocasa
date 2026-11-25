@@ -228,6 +228,6 @@ For this tool, transactions are entered manually via the API endpoints (`POST/GE
 4. **Decimal separator** -- raw Agenzia CSVs use comma (`,`) as decimal separator
 5. **CSV encoding** -- most CSVs are UTF-8, but some older semesters use Latin-1/ISO-8859-1
 6. **Trailing semicolons** -- CSV rows end with `;` creating an empty final column
-7. **Duplicate zip files** -- some semesters appear in multiple zips; handled via UNIQUE constraints on import
+7. **Duplicate zip files** -- some semesters appear in more than one zip. Identical archives are imported once; differing archives fail that semester
 8. **Duplicate CSV rows** -- some semesters (e.g. 2014_S2) have ~46 duplicate quotation rows; handled via deduplication before COPY
 9. **Quotations without zones** -- not every LinkZona in the VALORI CSV has a corresponding KML polygon (no FK constraint enforced)
