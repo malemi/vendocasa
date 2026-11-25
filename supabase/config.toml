@@ -1,18 +1,21 @@
 # Local Supabase stack for development and end-to-end tests only
-# (`npx supabase start`, run from the repository root). Production Auth is
-# configured on the hosted project; see docs/deployment.md. The auth settings
-# here mirror the production rules, so local tests run under them:
-# email confirmation required, email sign-in links only, no anonymous,
-# phone or OAuth sign-in, and the disposable-domain hook from backend
-# migration 0003. Not yet validated against the CLI on this machine
-# (insufficient disk on 2026-11-25); validate with `npx supabase start`.
+# (`npx supabase@3.4.0 start`, run from the repository root). Production Auth
+# is configured on the hosted project; see docs/deployment.md. The auth
+# settings here mirror the production rules, so local tests run under them:
+# email confirmation required, email sign-in links only, no anonymous or
+# phone sign-in, no OAuth provider, and the disposable-domain hook from
+# backend migration 0003.
+#
+# Locally the Data API also exposes the `app` and `omi` schemas, which
+# production does not expose. The client-role tests then see each refusal
+# come from privileges, not from an unexposed schema.
 
 project_id = "vendocasa"
 
 [api]
 enabled = true
 port = 54321
-schemas = ["public", "graphql_public"]
+schemas = ["public", "graphql_public", "app", "omi"]
 extra_search_path = ["public", "extensions"]
 max_rows = 1000
 
@@ -23,7 +26,7 @@ major_version = 17
 [studio]
 enabled = false
 
-[inbucket]
+[local_smtp]
 enabled = true
 port = 54324
 
@@ -42,24 +45,42 @@ enabled = false
 [auth]
 enabled = true
 site_url = "http://localhost:5173"
-additional_redirect_urls = ["http://localhost:5173", "http://127.0.0.1:5173"]
+additional_redirect_urls = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "http://localhost:4173",
+  "http://127.0.0.1:4173",
+]
 jwt_expiry = 3600
 enable_refresh_token_rotation = true
 enable_signup = true
 enable_anonymous_sign_ins = false
 
 [auth.rate_limit]
-# Small locally, so the M2 check can observe the refusal past the limit.
+# Small locally, so the email-rate test can observe the refusal past the limit.
+# The limit applies only with the SMTP settings below, as in production.
 email_sent = 3
 
 [auth.email]
-enable_signup = true
+enabled = true
 enable_confirmations = true
 double_confirm_changes = true
 max_frequency = "1s"
 
+# Sign-in emails go through the local mail catcher's SMTP port, so the email
+# rate limit applies as it does with production's custom SMTP. The messages
+# still appear in the mail catcher (port 54324).
+[auth.email.smtp]
+enabled = true
+host = "supabase_inbucket_vendocasa"
+port = 1025
+user = "local"
+pass = "local"
+admin_email = "noreply@vendocasa.local"
+sender_name = "VendoCasa"
+
 [auth.sms]
-enable_signup = false
+enabled = false
 
 [auth.hook.before_user_created]
 enabled = true

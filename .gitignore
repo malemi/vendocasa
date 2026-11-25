@@ -229,3 +229,15 @@ frontend/dist/
 # reference private infrastructure. Kept on disk, never published.
 docs/brief/
 docs/plans/
+docs/briefs/
+docs/execution-plans/
+docs/2026-11-22-code-audit.md
+
+# Local Supabase CLI state, and browser-journey output
+supabase/.branches/
+supabase/.temp/
+frontend/test-results/
+frontend/playwright-report/
+
+# Local session transcripts
+docs/sessions/
