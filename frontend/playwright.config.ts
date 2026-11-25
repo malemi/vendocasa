@@ -2,7 +2,7 @@
  * Browser journeys on the local stack: the built frontend, the real backend
  * over HTTP and local Supabase, with deterministic stand-ins for the model
  * provider and the public geocoders. How to run them: docs/deployment.md,
- * "Local end-to-end checks".
+ * sections "Local Supabase stack" and "Tests".
  */
 
 import { defineConfig, devices } from "@playwright/test";

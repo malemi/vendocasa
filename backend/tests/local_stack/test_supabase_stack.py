@@ -7,7 +7,8 @@ the backend itself (tests/e2e/serve.py) on port 8001. The local stack exposes
 the `app` and `omi` schemas, so each refusal below comes from privileges.
 
 The email-rate case uses up the stack's hourly sign-in email allowance; run
-the browser journeys (frontend/e2e/) first, or restart the auth container.
+the browser journeys (frontend/e2e/) first, or restart the auth container. The
+unconfirmed sign-up case sends one confirmation email.
 """
 
 from __future__ import annotations
@@ -184,6 +185,22 @@ def test_a_disposable_address_cannot_register(stack, db):
     with db.connect() as conn:
         assert conn.execute(text("SELECT count(*) FROM auth.users WHERE email = ANY(:e)"),
                             {"e": emails}).scalar() == 0
+
+
+def test_an_unconfirmed_sign_up_gets_no_session(stack):
+    # Until M7 creates the owner's account already confirmed, anyone could sign
+    # up with the owner's address. Without the link sent to that mailbox, no
+    # session exists, so no token can reach any route.
+    email = f"owner-claim-{uuid.uuid4().hex[:8]}@vendocasa.test"
+    password = f"Pw-{uuid.uuid4().hex}"
+    signup = httpx.post(f"{stack['API_URL']}/auth/v1/signup", headers=public(stack),
+                        json={"email": email, "password": password})
+    assert signup.status_code == 200, signup.text
+    assert "access_token" not in signup.json()
+    grant = httpx.post(f"{stack['API_URL']}/auth/v1/token", params={"grant_type": "password"},
+                       headers=public(stack), json={"email": email, "password": password})
+    assert grant.status_code == 400
+    assert grant.json()["error_code"] == "email_not_confirmed"
 
 
 def test_an_account_created_behind_the_hook_cannot_use_the_backend(stack, backend):

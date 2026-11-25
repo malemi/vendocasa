@@ -275,6 +275,15 @@ def test_direct_valuations_use_the_chat_level_limits(client, monkeypatch):
     assert second.status_code == 429
 
 
+def test_the_coefficient_list_uses_the_route_quota_not_the_chat_level_limits(client, monkeypatch):
+    # The list is static and reaches no outside service, so reading it must not
+    # spend the chat-level budget that chat and the direct valuations share.
+    monkeypatch.setattr(settings, "rate_limit_per_minute", 1)
+    monkeypatch.setattr(settings, "route_requests_per_minute", 2)
+    statuses = [client.get("/api/coefficients", headers=auth_headers(ACCOUNT)).status_code for _ in range(3)]
+    assert statuses == [200, 200, 429]
+
+
 def test_transaction_pages_are_bounded(client, recording_db):
     assert client.get("/api/transactions", params={"limit": 101}, headers=auth_headers(ACCOUNT)).status_code == 422
     assert client.get("/api/transactions", params={"offset": -1}, headers=auth_headers(ACCOUNT)).status_code == 422

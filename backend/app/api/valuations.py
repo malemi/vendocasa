@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.quotas import identity_quota, route_quota
 from app.auth import Account, current_account
 from app.database import get_db
 from app.services import spending
@@ -10,8 +11,11 @@ from app.services.valuation import enhanced_valuate_address, valuate_address
 
 router = APIRouter()
 
+# The two valuation routes reach the public geocoders, so they share the
+# chat-level limits; the static coefficient list gets the route quota.
 
-@router.get("/api/valuate")
+
+@router.get("/api/valuate", dependencies=[Depends(identity_quota)])
 # TODO: add response_model when a matching output schema is defined
 async def valuate(
     address: str = Query(..., description="Italian address to valuate"),
@@ -30,7 +34,7 @@ async def valuate(
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@router.post("/api/valuate/enhanced")
+@router.post("/api/valuate/enhanced", dependencies=[Depends(identity_quota)])
 # TODO: add response_model when a matching output schema is defined
 async def enhanced_valuate(
     request: EnhancedValuationRequest,
@@ -57,7 +61,7 @@ async def enhanced_valuate(
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@router.get("/api/coefficients")
+@router.get("/api/coefficients", dependencies=[Depends(route_quota)])
 # TODO: add response_model when a matching output schema is defined
 async def list_coefficients():
     """Return all available correction coefficient factors and options.

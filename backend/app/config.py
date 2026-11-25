@@ -1,10 +1,11 @@
 from pydantic_settings import BaseSettings
 
 # The only Anthropic API host a request may ever go to. Kept as a named
-# constant (not just a field default) so main.py can detect and loudly log
-# an override, since the Anthropic SDK otherwise falls back to the
-# ANTHROPIC_BASE_URL environment variable -- an ambient variable that has
-# nothing to do with this application's own configuration.
+# constant (not just a field default) so main.py can refuse to start when the
+# configured base URL differs. The Anthropic SDK would otherwise fall back to
+# the ANTHROPIC_BASE_URL environment variable -- an ambient variable that has
+# nothing to do with this application's own configuration -- and send the
+# API key there.
 DEFAULT_ANTHROPIC_BASE_URL = "https://api.anthropic.com"
 
 

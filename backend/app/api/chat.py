@@ -71,7 +71,6 @@ async def chat(
     SSE event types:
       text_delta  - streamed text tokens
       tool_result - structured valuation data for inline cards
-      map_update  - coordinates for map flyTo
       done        - stream complete
       error       - error occurred
     """
