@@ -160,6 +160,19 @@ async def test_an_overrun_turns_paid_calls_off(ledger):
     assert info.value.code == "paused"
 
 
+@pytest.mark.asyncio
+async def test_a_failed_switch_off_after_an_overrun_keeps_the_settlement(ledger, monkeypatch, caplog):
+    async def unavailable_switch(enabled):
+        raise RuntimeError("flag store unavailable")
+
+    reservation = await spending.reserve("acct-j", "model", 10_000)
+    monkeypatch.setattr(spending, "set_paid_calls", unavailable_switch)
+    with caplog.at_level("ERROR", logger=spending.logger.name):
+        assert await spending.settle(reservation, 10_001)
+    assert _month_row(ledger, "acct-j") == (10_001, 0)
+    assert "Turning paid calls off after the overrun" in caplog.text
+
+
 # --- Across processes ---------------------------------------------------------
 
 def _reserve_in_child(url, account, amount, attempts, barrier, results):

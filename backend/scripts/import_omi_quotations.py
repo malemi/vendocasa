@@ -154,7 +154,9 @@ def prepare_quotations(csv_path: str, semester: str) -> tuple[str, int]:
     # Boolean: COPY expects t/f, not True/False
     output["is_prevalent"] = output["is_prevalent"].map({True: "t", False: "f"})
     # Replace empty strings with None so they become \N (NULL) in COPY
-    for col in output.select_dtypes(include="object").columns:
+    # pandas 3 keeps text in `str` columns; naming both keeps every text column
+    # selected after pandas stops including `str` under `object`.
+    for col in output.select_dtypes(include=["object", "str"]).columns:
         output[col] = output[col].replace("", None)
         # Sanitize embedded tabs/newlines that would corrupt TSV
         output[col] = output[col].str.replace(r"[\t\n\r]", " ", regex=True)

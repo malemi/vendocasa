@@ -40,7 +40,7 @@ VALIDATION_SQL = """
 
 
 def validate(database_url: str) -> list[dict]:
-    from migrations.env import sync_database_url
+    from app.db_url import sync_database_url
 
     engine = create_engine(sync_database_url(database_url))
     try:

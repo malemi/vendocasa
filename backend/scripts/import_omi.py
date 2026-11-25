@@ -65,7 +65,7 @@ class SemesterImportFailed(Exception):
 
 
 def _sync_url(db_url: str) -> str:
-    from migrations.env import sync_database_url
+    from app.db_url import sync_database_url
 
     return sync_database_url(db_url)
 

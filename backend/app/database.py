@@ -3,19 +3,9 @@ from collections.abc import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import settings
+from app.db_url import async_database_url
 
-# Convert sync URL to async: postgresql+psycopg -> postgresql+psycopg (psycopg3 supports async natively)
-_db_url = settings.database_url
-# Handle various PostgreSQL URL formats (local, Supabase, etc.)
-if _db_url.startswith("postgres://"):
-    # Supabase-style short URL
-    _db_url = _db_url.replace("postgres://", "postgresql+psycopg_async://", 1)
-elif "+psycopg://" in _db_url and "+psycopg_async://" not in _db_url:
-    _db_url = _db_url.replace("+psycopg://", "+psycopg_async://")
-elif "postgresql://" in _db_url and "+psycopg" not in _db_url:
-    _db_url = _db_url.replace("postgresql://", "postgresql+psycopg_async://")
-
-engine = create_async_engine(_db_url, echo=False)
+engine = create_async_engine(async_database_url(settings.database_url), echo=False)
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 

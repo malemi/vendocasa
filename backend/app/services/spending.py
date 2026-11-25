@@ -194,7 +194,15 @@ async def settle(reservation: Reservation | str, actual_micro: int | None) -> bo
             "Reservation %s settled at %d micro-USD above its %d reservation; "
             "turning paid calls off.", reservation_id, charged, amount,
         )
-        await set_paid_calls(False)
+        try:
+            await set_paid_calls(False)
+        except Exception:
+            # The settlement above has committed; only the switch-off failed.
+            # Report that, so the owner turns paid calls off by hand.
+            logger.exception(
+                "Turning paid calls off after the overrun of reservation %s failed; "
+                "paid calls stay on until the owner turns them off.", reservation_id,
+            )
     return True
 
 

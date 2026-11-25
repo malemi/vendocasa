@@ -29,7 +29,7 @@ def parse_month(value: str) -> date:
 
 def record(database_url: str, usd: Decimal, month: date, note: str) -> None:
     from app.services.pricing import PRICE_TABLE_VERSION, usd_to_micro
-    from migrations.env import sync_database_url
+    from app.db_url import sync_database_url
 
     micro = usd_to_micro(usd)
     engine = create_engine(sync_database_url(database_url))

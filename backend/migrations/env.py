@@ -9,17 +9,9 @@ from alembic import context
 from sqlalchemy import create_engine, text
 
 from app.config import settings
+from app.db_url import sync_database_url
 
 VERSION_TABLE_SCHEMA = "app"
-
-
-def sync_database_url(url: str) -> str:
-    """Return a synchronous psycopg SQLAlchemy URL for any supported URL form."""
-    if url.startswith("postgres://"):
-        return url.replace("postgres://", "postgresql+psycopg://", 1)
-    if url.startswith("postgresql://"):
-        return url.replace("postgresql://", "postgresql+psycopg://", 1)
-    return url.replace("+psycopg_async://", "+psycopg://", 1)
 
 
 def run_migrations_offline() -> None:

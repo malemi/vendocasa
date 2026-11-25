@@ -53,7 +53,7 @@ def write_file(domains: list[str]) -> None:
 
 
 def replace_table(database_url: str, domains: list[str]) -> None:
-    from migrations.env import sync_database_url
+    from app.db_url import sync_database_url
 
     engine = create_engine(sync_database_url(database_url))
     with engine.begin() as conn:
