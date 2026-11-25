@@ -1,16 +1,17 @@
-"""Rate limiting for the public chat endpoint.
+"""Rate limiting for the chat and upload endpoints.
 
-The chat endpoint is public, unauthenticated, and calls a paid Anthropic
-model on every message. This module enforces three independent ceilings:
+Both endpoints require a verified account (backend/app/auth.py), and chat
+calls a paid Anthropic model. This module enforces three independent ceilings:
 
   - requests per minute, per identity
   - requests per day, per identity
   - Anthropic model calls per day, service-wide (a circuit breaker)
 
-An "identity" is the pair (vendocasa_uid cookie, client IP). Both are
-checked independently and a request is blocked if either exceeds its
-ceiling -- this is what keeps deleting the cookie from resetting the
-budget, since the IP-keyed counters are untouched by a new cookie value.
+An "identity" is the pair (account ID, client IP). Both are checked
+independently and a request is blocked if either exceeds its ceiling. The
+account limit is primary; the IP limit is a backstop that also slows one
+person who switches between several accounts from the same address, since
+the IP-keyed counters are untouched by a different account.
 
 Storage sits behind the `RateLimitStore` interface. `InMemoryRateLimitStore`
 is correct for a single worker process. Railway runs this backend as a
@@ -72,9 +73,8 @@ class InMemoryRateLimitStore(RateLimitStore):
     concern at this traffic volume.
     """
 
-    # Sweep expired windows every this many `hit` calls. Attacker-chosen
-    # identities (a fresh uid per cookie-less request) are otherwise a slow
-    # memory leak: nothing ever deletes an entry once its window has passed.
+    # Sweep expired windows every this many `hit` calls. Many identities
+    # (accounts and client addresses) are otherwise a slow memory leak: nothing ever deletes an entry once its window has passed.
     _SWEEP_EVERY = 500
 
     def __init__(self) -> None:
@@ -128,17 +128,18 @@ class RateLimiter:
     def __init__(self, store: RateLimitStore) -> None:
         self._store = store
 
-    def check_identity(self, uid: str, ip: str) -> RateLimitDecision:
-        """Enforce per-minute and per-day ceilings, keyed on both uid and IP.
+    def check_identity(self, account_id: str, ip: str) -> RateLimitDecision:
+        """Enforce per-minute and per-day ceilings, keyed on both account and IP.
 
         Checking both independently -- rather than combining them into one
-        key -- means a client that clears its cookie to get a fresh uid is
-        still constrained by the IP-keyed counters, which do not reset.
+        key -- means a client that switches to another account from the same
+        address is still constrained by the IP-keyed counters, which do not
+        reset.
         """
         checks = [
-            (f"uid:{uid}:minute", _MINUTE, settings.rate_limit_per_minute, "per-minute"),
+            (f"acct:{account_id}:minute", _MINUTE, settings.rate_limit_per_minute, "per-minute"),
             (f"ip:{ip}:minute", _MINUTE, settings.rate_limit_per_minute, "per-minute"),
-            (f"uid:{uid}:day", _DAY, settings.rate_limit_per_day, "per-day"),
+            (f"acct:{account_id}:day", _DAY, settings.rate_limit_per_day, "per-day"),
             (f"ip:{ip}:day", _DAY, settings.rate_limit_per_day, "per-day"),
         ]
         for key, window, limit, label in checks:

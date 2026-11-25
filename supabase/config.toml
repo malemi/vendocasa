@@ -1,0 +1,66 @@
+# Local Supabase stack for development and end-to-end tests only
+# (`npx supabase start`, run from the repository root). Production Auth is
+# configured on the hosted project; see docs/deployment.md. The auth settings
+# here mirror the production rules, so local tests run under them:
+# email confirmation required, email sign-in links only, no anonymous,
+# phone or OAuth sign-in, and the disposable-domain hook from backend
+# migration 0003. Not yet validated against the CLI on this machine
+# (insufficient disk on 2026-11-25); validate with `npx supabase start`.
+
+project_id = "vendocasa"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+major_version = 17
+
+[studio]
+enabled = false
+
+[inbucket]
+enabled = true
+port = 54324
+
+[storage]
+enabled = false
+
+[realtime]
+enabled = false
+
+[edge_runtime]
+enabled = false
+
+[analytics]
+enabled = false
+
+[auth]
+enabled = true
+site_url = "http://localhost:5173"
+additional_redirect_urls = ["http://localhost:5173", "http://127.0.0.1:5173"]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+enable_signup = true
+enable_anonymous_sign_ins = false
+
+[auth.rate_limit]
+# Small locally, so the M2 check can observe the refusal past the limit.
+email_sent = 3
+
+[auth.email]
+enable_signup = true
+enable_confirmations = true
+double_confirm_changes = true
+max_frequency = "1s"
+
+[auth.sms]
+enable_signup = false
+
+[auth.hook.before_user_created]
+enabled = true
+uri = "pg-functions://postgres/app/before_user_created"

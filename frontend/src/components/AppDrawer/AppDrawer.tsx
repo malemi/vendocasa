@@ -4,6 +4,8 @@ import { DrawerHeader } from "./DrawerHeader";
 interface AppDrawerProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Present when a user is signed in. */
+  onSignOut?: () => void;
   children: React.ReactNode;
 }
 
@@ -15,7 +17,7 @@ interface AppDrawerProps {
  * - Stays mounted (not unmounted) to preserve chat state
  * - Closes on Escape key or backdrop click
  */
-export function AppDrawer({ isOpen, onClose, children }: AppDrawerProps) {
+export function AppDrawer({ isOpen, onClose, onSignOut, children }: AppDrawerProps) {
   const panelRef = useRef<HTMLDivElement>(null);
 
   // Close on Escape
@@ -68,7 +70,7 @@ export function AppDrawer({ isOpen, onClose, children }: AppDrawerProps) {
         aria-modal="true"
         aria-label="VendoCasa — Chat"
       >
-        <DrawerHeader onClose={onClose} />
+        <DrawerHeader onClose={onClose} onSignOut={onSignOut} />
 
         {/* Chat content */}
         <div className="flex-1 flex flex-col overflow-hidden">

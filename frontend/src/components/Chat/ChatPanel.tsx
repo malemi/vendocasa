@@ -15,9 +15,11 @@ import {
   type StreamChatEvent,
 } from "../../api/client";
 import { ChatMessageBubble } from "./ChatMessage";
+import { ApiError, errorMessage } from "../../api/refusals";
 
 interface ChatPanelProps {
-  // no props currently needed – component manages its own state
+  /** Called when the session is no longer valid, with the message to show. */
+  onSessionLost?: (message: string) => void;
 }
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
@@ -38,7 +40,7 @@ const WELCOME_MESSAGE: ChatMessage = {
     "foto dell'immobile con la graffetta.",
 };
 
-export function ChatPanel(_props: ChatPanelProps) {
+export function ChatPanel({ onSessionLost }: ChatPanelProps) {
   const reactId = useId();
   const nextId = () => `msg-${reactId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   const [messages, setMessages] = useState<ChatMessage[]>([WELCOME_MESSAGE]);
@@ -93,13 +95,17 @@ export function ChatPanel(_props: ChatPanelProps) {
           setPendingDocs((prev) => [...prev, doc]);
         }
       } catch (err) {
-        alert(`Errore durante il caricamento: ${(err as Error).message}`);
+        if (err instanceof ApiError && err.requiresSignIn) {
+          onSessionLost?.(err.message);
+        } else {
+          alert(errorMessage(err));
+        }
       } finally {
         setIsUploading(false);
         if (fileInputRef.current) fileInputRef.current.value = "";
       }
     },
-    [pendingDocs]
+    [pendingDocs, onSessionLost]
   );
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -187,11 +193,14 @@ export function ChatPanel(_props: ChatPanelProps) {
               )
             );
           } else if (event.type === "error") {
-            const errorMsg = (event.data as { message: string }).message;
+            const errorMsg =
+              typeof (event.data as { message?: unknown }).message === "string"
+                ? (event.data as { message: string }).message
+                : errorMessage(null);
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === assistantId
-                  ? { ...m, content: m.content + `\n\n⚠️ Errore: ${errorMsg}`, isStreaming: false }
+                  ? { ...m, content: m.content + `\n\n⚠️ ${errorMsg}`, isStreaming: false }
                   : m
               )
             );
@@ -206,8 +215,10 @@ export function ChatPanel(_props: ChatPanelProps) {
         abortController.signal
       );
     } catch (err) {
-      if ((err as Error).name !== "AbortError") {
-        const errMsg = (err as Error).message;
+      if (err instanceof ApiError && err.requiresSignIn) {
+        onSessionLost?.(err.message);
+      } else if ((err as Error).name !== "AbortError") {
+        const errMsg = errorMessage(err);
         const isDocExpired = errMsg.includes("scaduto");
         setMessages((prev) =>
           prev.map((m) =>
@@ -216,7 +227,7 @@ export function ChatPanel(_props: ChatPanelProps) {
                   ...m,
                   content:
                     m.content +
-                    `\n\n⚠️ ${isDocExpired ? "Documento scaduto. Ricaricalo e riprova." : `Errore di connessione: ${errMsg}`}`,
+                    `\n\n⚠️ ${isDocExpired ? "Documento scaduto. Ricaricalo e riprova." : errMsg}`,
                   isStreaming: false,
                 }
               : m
@@ -235,7 +246,7 @@ export function ChatPanel(_props: ChatPanelProps) {
       );
       abortControllerRef.current = null;
     }
-  }, [input, isStreaming, messages, pendingDocs]);
+  }, [input, isStreaming, messages, pendingDocs, onSessionLost]);
 
   const handleStop = useCallback(() => {
     abortControllerRef.current?.abort();

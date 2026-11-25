@@ -14,6 +14,7 @@ from anthropic import AsyncAnthropic
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.refusals import refusal
 from app.services.coefficients import get_coefficient_options
 from app.services.rate_limit import rate_limiter
 from app.services.valuation import (
@@ -618,6 +619,7 @@ async def run_agent_stream(
         call_decision = rate_limiter.record_model_call()
         if not call_decision.allowed:
             logger.warning("Global daily model-call ceiling reached mid-request")
+            yield f"event: error\ndata: {_serialize(refusal('daily_limit'))}\n\n"
             yield "event: done\ndata: {}\n\n"
             return
 
@@ -644,10 +646,7 @@ async def run_agent_stream(
             # Never forward provider error detail (status, rate-limit info) to an
             # anonymous caller -- log it server-side and send a generic message.
             logger.exception("Anthropic API error")
-            yield (
-                f"event: error\n"
-                f"data: {_serialize({'message': 'The AI assistant is temporarily unavailable. Please try again later.'})}\n\n"
-            )
+            yield f"event: error\ndata: {_serialize(refusal('assistant_unavailable'))}\n\n"
             return
 
         # Check if Claude wants to call tools

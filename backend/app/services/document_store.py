@@ -27,6 +27,7 @@ TTL_SECONDS = 30 * 60  # 30 minutes
 @dataclass
 class StoredDocument:
     doc_id: str
+    owner_id: str  # account that uploaded it; only that account can use it
     filename: str
     media_type: str
     data: bytes  # raw PDF or image bytes
@@ -46,12 +47,13 @@ class StoredDocument:
 _store: dict[str, StoredDocument] = {}
 
 
-def store_document(filename: str, media_type: str, data: bytes) -> StoredDocument:
+def store_document(owner_id: str, filename: str, media_type: str, data: bytes) -> StoredDocument:
     """Store a document and return its metadata. Cleans expired entries first."""
     _cleanup_expired()
     doc_id = str(uuid.uuid4())
     doc = StoredDocument(
         doc_id=doc_id,
+        owner_id=owner_id,
         filename=filename,
         media_type=media_type,
         data=data,
@@ -61,11 +63,17 @@ def store_document(filename: str, media_type: str, data: bytes) -> StoredDocumen
     return doc
 
 
-def get_document(doc_id: str) -> StoredDocument | None:
-    """Retrieve a document by ID. Returns None if expired or not found."""
+def get_document(doc_id: str, owner_id: str) -> StoredDocument | None:
+    """Retrieve an account's own document by ID.
+
+    Returns None when the document is missing, expired, or belongs to another
+    account -- the three cases are indistinguishable to the caller.
+    """
     doc = _store.get(doc_id)
     if doc and doc.is_expired:
         del _store[doc_id]
+        return None
+    if doc is None or doc.owner_id != owner_id:
         return None
     return doc
 

@@ -4,14 +4,17 @@ from __future__ import annotations
 
 import base64
 import logging
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import Account, current_account
 from app.config import settings
 from app.database import get_db
+from app.refusals import refusal
 from app.services.agent import run_agent_stream
 from app.services.document_store import MAX_FILES_PER_MESSAGE, get_document
 from app.services.rate_limit import get_client_ip, rate_limiter
@@ -22,7 +25,9 @@ router = APIRouter()
 
 
 class ChatMessage(BaseModel):
-    role: str  # "user" or "assistant"
+    # Only conversation turns. A client-supplied "system" entry would reach the
+    # model as operator instructions, so any other role is refused (422).
+    role: Literal["user", "assistant"]
     content: str
     document_ids: list[str] | None = None
 
@@ -36,6 +41,7 @@ async def chat(
     body: ChatRequest,
     request: Request,
     db: AsyncSession = Depends(get_db),
+    account: Account = Depends(current_account),
 ):
     """Stream a chat response from the AI valuation agent.
 
@@ -50,30 +56,20 @@ async def chat(
       done        - stream complete
       error       - error occurred
     """
-    user_id = getattr(request.state, "user_id", "unknown")
     client_ip = get_client_ip(request)
-    logger.info("Chat request from user_id=%s ip=%s (%d messages)", user_id, client_ip, len(body.messages))
+    logger.info("Chat request from account %s (%d messages)", account.id, len(body.messages))
 
-    identity_decision = rate_limiter.check_identity(user_id, client_ip)
+    identity_decision = rate_limiter.check_identity(account.id, client_ip)
     if not identity_decision.allowed:
         raise HTTPException(
             status_code=429,
-            detail={
-                "error": "rate_limited",
-                "message": "Too many requests. Please wait before trying again.",
-            },
+            detail=refusal("rate_limited"),
             headers={"Retry-After": str(identity_decision.retry_after_seconds)},
         )
 
     global_decision = rate_limiter.peek_global_model_calls()
     if not global_decision.allowed:
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "error": "service_unavailable",
-                "message": "The AI assistant is temporarily unavailable. Please try again later.",
-            },
-        )
+        raise HTTPException(status_code=503, detail=refusal("daily_limit"))
 
     # ANTHROPIC_API_KEY presence is enforced at startup (app/main.py) --
     # this process would not be serving traffic if it were missing.
@@ -112,7 +108,7 @@ async def chat(
             # Multi-block content: documents/images first, then text
             content_blocks: list[dict] = []
             for doc_id in m.document_ids:
-                doc = get_document(doc_id)
+                doc = get_document(doc_id, account.id)
                 if doc is None:
                     raise HTTPException(
                         400,
@@ -145,9 +141,9 @@ async def chat(
                         },
                     })
                 logger.info(
-                    "Resolved %s %s (%s, %d bytes) for user_id=%s",
+                    "Resolved %s %s (%d bytes) for account %s",
                     "image" if doc.is_image else "document",
-                    doc.doc_id, doc.filename, doc.size, user_id,
+                    doc.doc_id, doc.size, account.id,
                 )
 
             if m.content.strip():

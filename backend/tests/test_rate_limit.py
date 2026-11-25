@@ -7,7 +7,11 @@ import time
 from starlette.datastructures import Headers
 
 from app.config import settings
+from app.refusals import REFUSAL_MESSAGES
 from app.services.rate_limit import InMemoryRateLimitStore, RateLimiter, get_client_ip
+from tests.auth_helpers import auth_headers
+
+ACCOUNT = "22222222-2222-4222-8222-222222222222"
 
 CHAT_BODY = {"messages": [{"role": "user", "content": "Ciao, valuta Via Roma 1 Milano"}]}
 
@@ -19,10 +23,10 @@ def test_per_minute_limit_returns_429(client, fake_anthropic, monkeypatch):
     monkeypatch.setattr(settings, "rate_limit_global_daily_model_calls", 1000)
 
     for _ in range(2):
-        response = client.post("/api/chat", json=CHAT_BODY)
+        response = client.post("/api/chat", json=CHAT_BODY, headers=auth_headers(ACCOUNT))
         assert response.status_code != 429
 
-    response = client.post("/api/chat", json=CHAT_BODY)
+    response = client.post("/api/chat", json=CHAT_BODY, headers=auth_headers(ACCOUNT))
     assert response.status_code == 429
     assert "Retry-After" in response.headers
     assert response.json()["detail"]["error"] == "rate_limited"
@@ -36,10 +40,10 @@ def test_per_day_limit_returns_429(client, fake_anthropic, monkeypatch):
     monkeypatch.setattr(settings, "rate_limit_global_daily_model_calls", 1000)
 
     for _ in range(2):
-        response = client.post("/api/chat", json=CHAT_BODY)
+        response = client.post("/api/chat", json=CHAT_BODY, headers=auth_headers(ACCOUNT))
         assert response.status_code != 429
 
-    response = client.post("/api/chat", json=CHAT_BODY)
+    response = client.post("/api/chat", json=CHAT_BODY, headers=auth_headers(ACCOUNT))
     assert response.status_code == 429
     assert response.json()["detail"]["error"] == "rate_limited"
 
@@ -49,22 +53,23 @@ def test_global_ceiling_returns_503(client, monkeypatch):
     monkeypatch.setattr(settings, "rate_limit_per_day", 1000)
     monkeypatch.setattr(settings, "rate_limit_global_daily_model_calls", 0)
 
-    response = client.post("/api/chat", json=CHAT_BODY)
+    response = client.post("/api/chat", json=CHAT_BODY, headers=auth_headers(ACCOUNT))
     assert response.status_code == 503
-    assert response.json()["detail"]["error"] == "service_unavailable"
+    assert response.json()["detail"]["error"] == "daily_limit"
+    assert response.json()["detail"]["message"] == REFUSAL_MESSAGES["daily_limit"]
 
 
-def test_ip_fallback_survives_cookie_deletion():
-    """Deleting the cookie must not reset the budget: the IP-keyed counter
-    is independent of the uid-keyed one, and a fresh uid on the same IP is
-    still blocked once the IP's own ceiling is hit.
+def test_ip_limit_survives_switching_accounts():
+    """Switching accounts must not reset the budget: the IP-keyed counter is
+    independent of the account-keyed one, and a different account on the
+    same IP is still blocked once the IP's own ceiling is hit.
     """
     limiter = RateLimiter(InMemoryRateLimitStore())  # fresh, isolated store
     limit_backup = settings.rate_limit_per_minute
     settings.rate_limit_per_minute = 2
     try:
         same_ip = "203.0.113.9"
-        decisions = [limiter.check_identity(f"uid-{i}", same_ip) for i in range(3)]
+        decisions = [limiter.check_identity(f"account-{i}", same_ip) for i in range(3)]
     finally:
         settings.rate_limit_per_minute = limit_backup
 
@@ -73,7 +78,7 @@ def test_ip_fallback_survives_cookie_deletion():
 
 
 def test_store_sweeps_expired_windows(monkeypatch):
-    """Attacker-chosen identities (a fresh uid per cookie-less request) grow
+    """Many identities (accounts and client addresses) grow
     the store forever unless expired windows are swept -- verify `hit`
     actually purges them instead of leaking memory indefinitely.
     """
@@ -145,12 +150,12 @@ def test_get_client_ip_falls_back_to_request_client_host():
     assert get_client_ip(req) == "10.0.0.1"
 
 
-def test_rotating_leftmost_xff_with_no_cookie_still_gets_limited(client, fake_anthropic, monkeypatch):
-    """Reproduces the exploit from the integration review: a caller with no
-    vendocasa_uid cookie (fresh uuid4 identity every request) that rotates
-    the leftmost X-Forwarded-For entry must still be blocked, because the
-    real identity comes from the rightmost (proxy-appended) hop, which the
-    caller does not control.
+def test_rotating_leftmost_xff_with_fresh_accounts_still_gets_limited(client, fake_anthropic, monkeypatch):
+    """Reproduces the exploit from the integration review: a caller with a
+    fresh account for every request that rotates the leftmost
+    X-Forwarded-For entry must still be blocked, because the IP identity
+    comes from the rightmost (proxy-appended) hop, which the caller does not
+    control.
     """
     fake_anthropic()
     monkeypatch.setattr(settings, "rate_limit_per_minute", 5)
@@ -160,11 +165,10 @@ def test_rotating_leftmost_xff_with_no_cookie_still_gets_limited(client, fake_an
     real_rightmost_ip = "203.0.113.42"
     statuses = []
     for i in range(6):
-        client.cookies.clear()  # no vendocasa_uid cookie -> fresh uuid4 identity
         response = client.post(
             "/api/chat",
             json=CHAT_BODY,
-            headers={"x-forwarded-for": f"10.10.10.{i}, {real_rightmost_ip}"},
+            headers={**auth_headers(), "x-forwarded-for": f"10.10.10.{i}, {real_rightmost_ip}"},
         )
         statuses.append(response.status_code)
 
@@ -185,11 +189,11 @@ def test_forged_envoy_header_with_xff_present_still_gets_limited(client, fake_an
     real_rightmost_ip = "203.0.113.99"
     statuses = []
     for i in range(6):
-        client.cookies.clear()
         response = client.post(
             "/api/chat",
             json=CHAT_BODY,
             headers={
+                **auth_headers(),
                 "x-forwarded-for": f"10.10.10.{i}, {real_rightmost_ip}",
                 "x-envoy-external-address": f"198.51.100.{i}",  # rotated, forged
             },
@@ -212,11 +216,10 @@ def test_forged_envoy_header_without_xff_does_not_bypass(client, fake_anthropic,
 
     statuses = []
     for i in range(6):
-        client.cookies.clear()
         response = client.post(
             "/api/chat",
             json=CHAT_BODY,
-            headers={"x-envoy-external-address": f"198.51.100.{i}"},  # rotated, forged, no XFF
+            headers={**auth_headers(), "x-envoy-external-address": f"198.51.100.{i}"},  # rotated, forged, no XFF
         )
         statuses.append(response.status_code)
 

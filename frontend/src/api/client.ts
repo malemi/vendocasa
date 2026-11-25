@@ -1,12 +1,31 @@
-import axios from "axios";
+import axios, { isAxiosError } from "axios";
 import type { UploadedDocument } from "../types";
+import { accessToken } from "../auth/supabase";
+import { ApiError, GENERIC_ERROR, NETWORK_ERROR, apiErrorFromResponse, refusalFromBody } from "./refusals";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
-const api = axios.create({
-  baseURL: `${API_BASE}/api`,
-  withCredentials: true,
+// Every API call carries the session's access token; no cookies are used.
+const api = axios.create({ baseURL: `${API_BASE}/api` });
+
+api.interceptors.request.use(async (config) => {
+  const token = await accessToken();
+  if (token) config.headers.set("Authorization", `Bearer ${token}`);
+  return config;
 });
+
+async function authHeaders(): Promise<Record<string, string>> {
+  const token = await accessToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+function toApiError(error: unknown): unknown {
+  if (isAxiosError(error)) {
+    if (error.response) return new ApiError(refusalFromBody(error.response.data), error.response.status);
+    return new ApiError({ code: null, message: NETWORK_ERROR }, 0);
+  }
+  return error instanceof ApiError ? error : new ApiError({ code: null, message: GENERIC_ERROR }, 0);
+}
 
 // Document upload
 
@@ -14,9 +33,14 @@ export async function uploadDocument(file: File): Promise<UploadedDocument> {
   const formData = new FormData();
   formData.append("file", file);
 
-  const { data } = await api.post("/documents/upload", formData, {
-    headers: { "Content-Type": "multipart/form-data" },
-  });
+  let data;
+  try {
+    ({ data } = await api.post("/documents/upload", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    }));
+  } catch (error) {
+    throw toApiError(error);
+  }
 
   return {
     docId: data.doc_id,
@@ -40,15 +64,13 @@ export async function streamChat(
 ): Promise<void> {
   const response = await fetch(`${API_BASE}/api/chat`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...(await authHeaders()) },
     body: JSON.stringify({ messages }),
-    credentials: "include",
     signal,
   });
 
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Chat request failed (${response.status}): ${text}`);
+    throw await apiErrorFromResponse(response);
   }
 
   const reader = response.body!.getReader();

@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import Account, require_owner
 from app.database import get_db
 from app.schemas.transaction import TransactionCreate, TransactionUpdate
 
@@ -13,8 +14,9 @@ router = APIRouter()
 async def create_transaction(
     data: TransactionCreate,
     db: AsyncSession = Depends(get_db),
+    _owner: Account = Depends(require_owner),
 ):
-    """Create a manually entered transaction record."""
+    """Create a manually entered transaction record (owner only)."""
     result = await db.execute(
         text("""
             INSERT INTO omi.transactions
@@ -74,8 +76,9 @@ async def update_transaction(
     transaction_id: int,
     data: TransactionUpdate,
     db: AsyncSession = Depends(get_db),
+    _owner: Account = Depends(require_owner),
 ):
-    """Update a transaction record."""
+    """Update a transaction record (owner only)."""
     # Build SET clause from non-None fields
     updates = {k: v for k, v in data.model_dump().items() if v is not None}
     if not updates:
@@ -99,8 +102,9 @@ async def update_transaction(
 async def delete_transaction(
     transaction_id: int,
     db: AsyncSession = Depends(get_db),
+    _owner: Account = Depends(require_owner),
 ):
-    """Delete a transaction record."""
+    """Delete a transaction record (owner only)."""
     result = await db.execute(
         text("DELETE FROM omi.transactions WHERE id = :id RETURNING id"),
         {"id": transaction_id},

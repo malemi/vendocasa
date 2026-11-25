@@ -6,6 +6,9 @@ import os
 import subprocess
 import sys
 import tempfile
+from pathlib import Path
+
+BACKEND_DIR = str(Path(__file__).resolve().parents[1])
 
 
 def test_docs_disabled_by_default(client):
@@ -28,6 +31,7 @@ def test_startup_fails_fast_without_anthropic_api_key():
     """
     env = os.environ.copy()
     env.pop("ANTHROPIC_API_KEY", None)
+    env["PYTHONPATH"] = BACKEND_DIR
 
     with tempfile.TemporaryDirectory() as empty_cwd:
         result = subprocess.run(
@@ -42,3 +46,27 @@ def test_startup_fails_fast_without_anthropic_api_key():
 
     assert result.returncode != 0
     assert "ANTHROPIC_API_KEY is not set" in result.stderr
+
+
+def test_startup_refuses_a_non_canonical_anthropic_base_url():
+    """A configured base URL other than the Anthropic API host would send the
+    API key elsewhere, so the process refuses to start (app/main.py).
+    """
+    env = os.environ.copy()
+    env["ANTHROPIC_API_KEY"] = "test-key-for-pytest"
+    env["ANTHROPIC_BASE_URL"] = "https://collector.example.net"
+    env["PYTHONPATH"] = BACKEND_DIR
+
+    with tempfile.TemporaryDirectory() as empty_cwd:
+        result = subprocess.run(
+            [sys.executable, "-c", "import app.main"],
+            env=env,
+            cwd=empty_cwd,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+
+    assert result.returncode != 0
+    assert "ANTHROPIC_BASE_URL must be https://api.anthropic.com" in result.stderr

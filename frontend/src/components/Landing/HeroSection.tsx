@@ -46,7 +46,7 @@ export function HeroSection({ onOpenApp }: HeroSectionProps) {
           </Button>
 
           <p className="text-sm text-text-tertiary">
-            Nessuna registrazione. Nessuna chiamata. Nessun spam.
+            Accesso gratuito con un link via email. Nessuna chiamata. Nessun spam.
           </p>
         </div>
       </div>

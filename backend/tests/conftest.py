@@ -10,14 +10,31 @@ from __future__ import annotations
 import os
 
 os.environ.setdefault("ANTHROPIC_API_KEY", "test-key-for-pytest")
+# Identity configuration for tests: HS256 tokens signed with a test secret,
+# issued by a fictitious project URL. Real deployments use the project's JWKS.
+os.environ.setdefault("SUPABASE_URL", "https://test-project.supabase.co")
+os.environ.setdefault("SUPABASE_JWT_ALGORITHM", "HS256")
+os.environ.setdefault("SUPABASE_JWT_SECRET", "test-jwt-secret-for-pytest-only-0123456789abcdef")
+os.environ.setdefault("OWNER_USER_ID", "00000000-0000-4000-8000-00000000000a")
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.database import get_db
 from app.main import app
+from app.services import disposable_domains
 from app.services.rate_limit import rate_limiter
 from tests.fakes import FakeResponse, make_fake_anthropic_factory
+
+TEST_DISPOSABLE_DOMAINS = {"mailinator.com", "yopmail.com"}
+
+
+@pytest.fixture(autouse=True)
+def _disposable_domains():
+    """Tests use a fixed domain set instead of the database table."""
+    disposable_domains.set_domains_for_tests(TEST_DISPOSABLE_DOMAINS)
+    yield
+    disposable_domains.set_domains_for_tests(TEST_DISPOSABLE_DOMAINS)
 
 
 @pytest.fixture(autouse=True)

@@ -15,6 +15,17 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173"
     anthropic_api_key: str = ""
 
+    # Identity (backend/app/auth.py). SUPABASE_URL is the project URL, e.g.
+    # https://<ref>.supabase.co; tokens are verified against its JWKS, or
+    # against SUPABASE_JWT_SECRET when the algorithm is HS256. Without
+    # SUPABASE_URL every protected route refuses with 503, never anonymously.
+    supabase_url: str = ""
+    supabase_jwt_algorithm: str = "ES256"
+    supabase_jwt_secret: str = ""
+    # The owner account (token subject) may write transaction records and
+    # read spending. Empty means no account is the owner.
+    owner_user_id: str = ""
+
     # The model is server-side configuration only -- nothing in a client
     # request can select or influence it.
     anthropic_model: str = "claude-sonnet-4-20250514"
@@ -25,7 +36,7 @@ class Settings(BaseSettings):
     enable_api_docs: bool = False
 
     # Rate limiting (backend/app/services/rate_limit.py). Identity = the
-    # vendocasa_uid cookie AND the client IP, checked independently.
+    # verified account AND the client IP, checked independently.
     rate_limit_per_minute: int = 5
     rate_limit_per_day: int = 50
     rate_limit_global_daily_model_calls: int = 2000

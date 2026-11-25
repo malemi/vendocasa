@@ -1,10 +1,12 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { LandingPage } from "./components/Landing/LandingPage";
 import { AppDrawer } from "./components/AppDrawer/AppDrawer";
 import { ChatPanel } from "./components/Chat/ChatPanel";
 import { CookieBanner } from "./components/CookieBanner";
+import { SignInPanel } from "./components/Auth/SignInPanel";
+import { signOut, useSession } from "./hooks/useSession";
 import { PrivacyPolicy } from "./pages/PrivacyPolicy";
 import { TermsOfService } from "./pages/TermsOfService";
 
@@ -16,6 +18,9 @@ function HomePage() {
     () => localStorage.getItem("cookieConsent") === "true"
   );
   const [showCookieBanner, setShowCookieBanner] = useState(false);
+  const { session, ready, arrivedFromSignInLink } = useSession();
+  // Why the user must sign in again, shown on the sign-in panel.
+  const [signInNotice, setSignInNotice] = useState<string | null>(null);
 
   const handleOpenApp = useCallback(() => {
     if (!cookieConsent) {
@@ -36,6 +41,23 @@ function HomePage() {
     setShowCookieBanner(false);
   }, []);
 
+  // Coming back from a sign-in link: open the app straight away.
+  useEffect(() => {
+    if (ready && session && arrivedFromSignInLink) handleOpenApp();
+    // Run once, when the stored or linked session has been read.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready]);
+
+  const handleSessionLost = useCallback((message: string) => {
+    setSignInNotice(message);
+    void signOut();
+  }, []);
+
+  const handleSignOut = useCallback(() => {
+    setSignInNotice(null);
+    void signOut();
+  }, []);
+
   return (
     <>
       {/* Landing page (always visible behind drawer) */}
@@ -53,8 +75,13 @@ function HomePage() {
       <AppDrawer
         isOpen={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
+        onSignOut={session ? handleSignOut : undefined}
       >
-        <ChatPanel />
+        {session ? (
+          <ChatPanel onSessionLost={handleSessionLost} />
+        ) : (
+          <SignInPanel notice={signInNotice} />
+        )}
       </AppDrawer>
     </>
   );

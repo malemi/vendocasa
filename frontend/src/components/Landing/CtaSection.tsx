@@ -22,7 +22,7 @@ export function CtaSection({ onOpenApp }: CtaSectionProps) {
           <span className="text-accent">vero valore</span>?
         </h2>
         <p className="text-text-secondary text-lg mb-10">
-          2 minuti. Gratis. Senza registrazione.
+          2 minuti. Gratis, con un link via email.
         </p>
 
         <Button size="lg" onClick={onOpenApp} className="animate-glow">

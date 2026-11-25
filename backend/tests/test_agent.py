@@ -49,10 +49,15 @@ async def test_loop_stops_early_when_global_ceiling_hit(monkeypatch):
     factory = make_fake_anthropic_factory([always_tool_use])
     monkeypatch.setattr("app.services.agent.AsyncAnthropic", factory)
 
-    await _collect(run_agent_stream([{"role": "user", "content": "Ciao"}], db=None))
+    events = await _collect(run_agent_stream([{"role": "user", "content": "Ciao"}], db=None))
 
     # Only one round should have actually called the model: the ceiling is 1.
     assert len(factory.instance.messages.calls) == 1
+    # The user is told why the answer stopped, then the stream ends.
+    error_events = [e for e in events if e.startswith("event: error")]
+    assert len(error_events) == 1
+    assert '"error": "daily_limit"' in error_events[0]
+    assert events[-1].startswith("event: done")
 
 
 @pytest.mark.asyncio
@@ -85,7 +90,7 @@ async def test_sse_error_event_never_forwards_raw_exception_text(monkeypatch):
     error_events = [e for e in events if e.startswith("event: error")]
     assert len(error_events) == 1
     assert secret_looking_message not in error_events[0]
-    assert "temporarily unavailable" in error_events[0]
+    assert '"error": "assistant_unavailable"' in error_events[0]
 
 
 @pytest.mark.asyncio

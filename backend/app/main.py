@@ -1,10 +1,10 @@
 import logging
-from uuid import uuid4
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
+from app.auth import AuthMiddleware
 from app.config import DEFAULT_ANTHROPIC_BASE_URL, settings
 
 logger = logging.getLogger(__name__)
@@ -24,12 +24,13 @@ logger.info(
     bool(settings.anthropic_api_key),
     settings.anthropic_base_url,
 )
+# The API key may only ever be sent to the Anthropic API host. A different
+# configured base URL is a misconfiguration (or an attempt to redirect the
+# key), so the process refuses to start rather than merely logging it.
 if settings.anthropic_base_url != DEFAULT_ANTHROPIC_BASE_URL:
-    logger.warning(
-        "ANTHROPIC_BASE_URL is overridden to %s -- every Anthropic request, "
-        "including the API key, is being sent there instead of the default "
-        "Anthropic host.",
-        settings.anthropic_base_url,
+    raise RuntimeError(
+        "ANTHROPIC_BASE_URL must be "
+        f"{DEFAULT_ANTHROPIC_BASE_URL}; refusing to start with a different provider host."
     )
 
 # /docs, /redoc, and /openapi.json publish exactly which routes exist --
@@ -43,37 +44,22 @@ _docs_kwargs = (
 
 app = FastAPI(
     title="VendoCasa - Italian Real Estate Valuation",
-    description="Personal tool for OMI-based property valuation across Italian cities",
+    description="OMI-based property valuation for registered users",
     version="0.1.0",
     **_docs_kwargs,
 )
 
+# Middleware order: the last one added is the outermost. CORS stays outside
+# authentication so preflight requests are answered and refusals carry CORS
+# headers the browser can read.
+app.add_middleware(AuthMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],
 )
-
-
-@app.middleware("http")
-async def user_tracking(request: Request, call_next):
-    """Set/read a vendocasa_uid cookie to identify users for abuse prevention."""
-    user_id = request.cookies.get("vendocasa_uid")
-    if not user_id:
-        user_id = str(uuid4())
-    request.state.user_id = user_id
-    response = await call_next(request)
-    response.set_cookie(
-        "vendocasa_uid",
-        user_id,
-        max_age=365 * 24 * 3600,
-        httponly=True,
-        secure=True,
-        samesite="none",
-    )
-    return response
 
 
 app.include_router(api_router)
