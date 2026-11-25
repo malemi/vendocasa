@@ -165,6 +165,8 @@ export interface UploadedDocument {
   filename: string;
   size: number;
   mediaType: string;
+  /** The original file, kept in memory to upload again if the server copy expires. */
+  file?: File;
 }
 
 // Chat types

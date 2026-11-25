@@ -1,5 +1,6 @@
 import { FASCIA_LABELS } from "../../types";
 import { formatEur } from "../../utils/format";
+import { locationNotice, noDataNotice } from "./chatLogic";
 
 /**
  * Compact inline cards for tool results displayed within chat messages.
@@ -11,13 +12,24 @@ interface InlineToolResultProps {
 }
 
 export function InlineToolResult({ tool, result }: InlineToolResultProps) {
-  if (tool === "valuate_property") {
-    return <BasicValuationCard result={result} />;
-  }
-  if (tool === "enhanced_valuate_property") {
-    return <EnhancedValuationCard result={result} />;
-  }
-  return null;
+  if (tool !== "valuate_property" && tool !== "enhanced_valuate_property") return null;
+  const location = locationNotice(result);
+  const noData = noDataNotice(result);
+  return (
+    <>
+      {tool === "valuate_property" ? (
+        <BasicValuationCard result={result} />
+      ) : (
+        <EnhancedValuationCard result={result} />
+      )}
+      {(location || noData) && (
+        <div className="mt-1 p-2 rounded-lg border border-accent/40 bg-accent-muted text-[0.74rem] text-text-secondary" role="note">
+          {noData && <p>{noData}</p>}
+          {location && <p>⚠️ {location}</p>}
+        </div>
+      )}
+    </>
+  );
 }
 
 function BasicValuationCard({ result }: { result: Record<string, unknown> }) {

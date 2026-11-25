@@ -16,6 +16,7 @@ import {
 } from "../../api/client";
 import { ChatMessageBubble } from "./ChatMessage";
 import { ApiError, errorMessage } from "../../api/refusals";
+import { conversationAtLimit, reuploadDocuments } from "./chatLogic";
 
 interface ChatPanelProps {
   /** Called when the session is no longer valid, with the message to show. */
@@ -92,7 +93,7 @@ export function ChatPanel({ onSessionLost }: ChatPanelProps) {
             continue;
           }
           const doc = await uploadDocument(file);
-          setPendingDocs((prev) => [...prev, doc]);
+          setPendingDocs((prev) => [...prev, { ...doc, file }]);
         }
       } catch (err) {
         if (err instanceof ApiError && err.requiresSignIn) {
@@ -128,9 +129,20 @@ export function ChatPanel({ onSessionLost }: ChatPanelProps) {
 
   // --- Send message ---
 
+  const [historyFull, setHistoryFull] = useState(false);
+  const atLimit = historyFull || conversationAtLimit(messages);
+
+  const handleNewConversation = useCallback(() => {
+    abortControllerRef.current?.abort();
+    setMessages([WELCOME_MESSAGE]);
+    setPendingDocs([]);
+    setInput("");
+    setHistoryFull(false);
+  }, []);
+
   const handleSend = useCallback(async () => {
     const trimmed = input.trim();
-    if ((!trimmed && pendingDocs.length === 0) || isStreaming) return;
+    if ((!trimmed && pendingDocs.length === 0) || isStreaming || atLimit) return;
 
     const userMsg: ChatMessage = {
       id: nextId(),
@@ -155,98 +167,74 @@ export function ChatPanel({ onSessionLost }: ChatPanelProps) {
     setInput("");
     setIsStreaming(true);
 
-    const allMsgs = [...messages.filter((m) => m.id !== "welcome"), userMsg];
-    const history = allMsgs.map((m, idx) => ({
-      role: m.role,
-      content: m.content,
-      ...(m.documents?.length && idx === allMsgs.length - 1
-        ? { document_ids: m.documents.map((d) => d.docId) }
-        : {}),
-    }));
+    // Documents are sent with the message they are attached to.
+    const buildHistory = (last: ChatMessage) => {
+      const allMsgs = [...messages.filter((m) => m.id !== "welcome"), last];
+      return allMsgs.map((m, idx) => ({
+        role: m.role,
+        content: m.content,
+        ...(m.documents?.length && idx === allMsgs.length - 1
+          ? { document_ids: m.documents.map((d) => d.docId) }
+          : {}),
+      }));
+    };
+
+    const updateAssistant = (update: (m: ChatMessage) => ChatMessage) =>
+      setMessages((prev) => prev.map((m) => (m.id === assistantId ? update(m) : m)));
+
+    const onStreamEvent = (event: StreamChatEvent) => {
+      if (event.type === "text_delta") {
+        const text = (event.data as { text: string }).text;
+        updateAssistant((m) => ({ ...m, content: m.content + text }));
+      } else if (event.type === "tool_result") {
+        const toolResult: ChatToolResult = {
+          tool: (event.data as { tool: string }).tool,
+          result: (event.data as { result: Record<string, unknown> }).result,
+        };
+        updateAssistant((m) => ({ ...m, toolResults: [...(m.toolResults || []), toolResult] }));
+      } else if (event.type === "error") {
+        const errorMsg =
+          typeof (event.data as { message?: unknown }).message === "string"
+            ? (event.data as { message: string }).message
+            : errorMessage(null);
+        updateAssistant((m) => ({ ...m, content: m.content + `\n\n⚠️ ${errorMsg}`, isStreaming: false }));
+      } else if (event.type === "done") {
+        updateAssistant((m) => ({ ...m, isStreaming: false }));
+      }
+    };
 
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
     try {
-      await streamChat(
-        history,
-        (event: StreamChatEvent) => {
-          if (event.type === "text_delta") {
-            const text = (event.data as { text: string }).text;
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === assistantId
-                  ? { ...m, content: m.content + text }
-                  : m
-              )
-            );
-          } else if (event.type === "tool_result") {
-            const toolResult: ChatToolResult = {
-              tool: (event.data as { tool: string }).tool,
-              result: (event.data as { result: Record<string, unknown> }).result,
-            };
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === assistantId
-                  ? { ...m, toolResults: [...(m.toolResults || []), toolResult] }
-                  : m
-              )
-            );
-          } else if (event.type === "error") {
-            const errorMsg =
-              typeof (event.data as { message?: unknown }).message === "string"
-                ? (event.data as { message: string }).message
-                : errorMessage(null);
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === assistantId
-                  ? { ...m, content: m.content + `\n\n⚠️ ${errorMsg}`, isStreaming: false }
-                  : m
-              )
-            );
-          } else if (event.type === "done") {
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === assistantId ? { ...m, isStreaming: false } : m
-              )
-            );
-          }
-        },
-        abortController.signal
-      );
+      try {
+        await streamChat(buildHistory(userMsg), onStreamEvent, abortController.signal);
+      } catch (firstError) {
+        // The server copy of an attached document expired (or the server
+        // restarted): upload the kept files again and send the message once more.
+        if (!(firstError instanceof ApiError && firstError.code === "document_expired")) throw firstError;
+        const fresh = await reuploadDocuments(currentDocs, uploadDocument);
+        if (!fresh) throw firstError;
+        const retried: ChatMessage = { ...userMsg, documents: fresh };
+        setMessages((prev) => prev.map((m) => (m.id === userMsg.id ? retried : m)));
+        await streamChat(buildHistory(retried), onStreamEvent, abortController.signal);
+      }
     } catch (err) {
       if (err instanceof ApiError && err.requiresSignIn) {
         onSessionLost?.(err.message);
       } else if ((err as Error).name !== "AbortError") {
-        const errMsg = errorMessage(err);
-        const isDocExpired = errMsg.includes("scaduto");
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantId
-              ? {
-                  ...m,
-                  content:
-                    m.content +
-                    `\n\n⚠️ ${isDocExpired ? "Documento scaduto. Ricaricalo e riprova." : errMsg}`,
-                  isStreaming: false,
-                }
-              : m
-          )
-        );
-        if (isDocExpired && currentDocs.length > 0) {
-          setPendingDocs(currentDocs);
-        }
+        if (err instanceof ApiError && err.code === "history_limit") setHistoryFull(true);
+        const expired = err instanceof ApiError && err.code === "document_expired";
+        updateAssistant((m) => ({ ...m, content: m.content + `\n\n⚠️ ${errorMessage(err)}`, isStreaming: false }));
+        // The files were not in memory any more: let the user attach them again.
+        if (expired && currentDocs.length > 0) setPendingDocs(currentDocs);
       }
     } finally {
       setIsStreaming(false);
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === assistantId ? { ...m, isStreaming: false } : m
-        )
-      );
+      updateAssistant((m) => ({ ...m, isStreaming: false }));
       abortControllerRef.current = null;
     }
-  }, [input, isStreaming, messages, pendingDocs, onSessionLost]);
+  }, [input, isStreaming, messages, pendingDocs, onSessionLost, atLimit]);
 
   const handleStop = useCallback(() => {
     abortControllerRef.current?.abort();
@@ -262,8 +250,8 @@ export function ChatPanel({ onSessionLost }: ChatPanelProps) {
     [handleSend]
   );
 
-  const canSend = input.trim() || pendingDocs.length > 0;
-  const isAttachDisabled = isStreaming || isUploading || pendingDocs.length >= MAX_FILES;
+  const canSend = (input.trim() || pendingDocs.length > 0) && !atLimit;
+  const isAttachDisabled = isStreaming || isUploading || pendingDocs.length >= MAX_FILES || atLimit;
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-bg-elevated">
@@ -287,6 +275,23 @@ export function ChatPanel({ onSessionLost }: ChatPanelProps) {
         ))}
         <div ref={messagesEndRef} />
       </div>
+
+      {/* At the history limit: start over explicitly, nothing is trimmed silently */}
+      {atLimit && (
+        <div
+          className="flex items-center justify-between gap-3 px-3 py-2 border-t border-border bg-bg-elevated text-sm text-text-secondary"
+          role="status"
+        >
+          <span>La conversazione ha raggiunto la lunghezza massima.</span>
+          <button
+            type="button"
+            onClick={handleNewConversation}
+            className="shrink-0 px-3 py-1.5 rounded-lg bg-accent text-bg-primary font-semibold cursor-pointer"
+          >
+            Nuova conversazione
+          </button>
+        </div>
+      )}
 
       {/* Input bar */}
       <div className="flex gap-2 p-3 border-t border-border bg-bg-primary items-end">
