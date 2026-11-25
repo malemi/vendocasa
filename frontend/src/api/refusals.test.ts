@@ -3,10 +3,12 @@ import {
   ApiError,
   GENERIC_ERROR,
   NETWORK_ERROR,
+  STREAM_INTERRUPTED,
   apiErrorFromResponse,
   errorMessage,
   refusalFromBody,
 } from "./refusals";
+import { SseProtocolError } from "./sse";
 
 // One representative body per refusal the brief lists (scope 1), as the
 // backend sends it (backend/app/refusals.py).
@@ -66,5 +68,6 @@ describe("ApiError", () => {
   it("maps network failures and unknown errors to Italian messages", () => {
     expect(errorMessage(new TypeError("Failed to fetch"))).toBe(NETWORK_ERROR);
     expect(errorMessage(new Error("boom"))).toBe(GENERIC_ERROR);
+    expect(errorMessage(new SseProtocolError("ended mid-event"))).toBe(STREAM_INTERRUPTED);
   });
 });

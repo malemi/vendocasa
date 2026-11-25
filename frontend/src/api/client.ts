@@ -2,6 +2,7 @@ import axios, { isAxiosError } from "axios";
 import type { UploadedDocument } from "../types";
 import { accessToken } from "../auth/supabase";
 import { ApiError, GENERIC_ERROR, NETWORK_ERROR, apiErrorFromResponse, refusalFromBody } from "./refusals";
+import { SseParser } from "./sse";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
@@ -73,38 +74,20 @@ export async function streamChat(
     throw await apiErrorFromResponse(response);
   }
 
-  const reader = response.body!.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
+  if (!response.body) {
+    throw new ApiError({ code: null, message: GENERIC_ERROR }, response.status);
+  }
+  const reader = response.body.getReader();
+  // The parser keeps its state across reads, so events survive any split of
+  // the stream (frontend/src/api/sse.ts).
+  const parser = new SseParser((event) =>
+    onEvent({ type: event.type as StreamChatEvent["type"], data: event.data }),
+  );
 
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() || "";
-
-    let eventType = "";
-    let eventData = "";
-
-    for (const line of lines) {
-      if (line.startsWith("event: ")) {
-        eventType = line.slice(7);
-      } else if (line.startsWith("data: ")) {
-        eventData = line.slice(6);
-      } else if (line === "" && eventType && eventData) {
-        try {
-          onEvent({
-            type: eventType as StreamChatEvent["type"],
-            data: JSON.parse(eventData),
-          });
-        } catch {
-          // skip malformed events
-        }
-        eventType = "";
-        eventData = "";
-      }
-    }
+    parser.push(value);
   }
+  parser.end();
 }

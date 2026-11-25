@@ -10,6 +10,7 @@
 export const GENERIC_ERROR = "Si è verificato un problema. Riprova tra poco.";
 export const NETWORK_ERROR =
   "Impossibile raggiungere VendoCasa. Controlla la connessione e riprova.";
+export const STREAM_INTERRUPTED = "La risposta si è interrotta. Riprova.";
 
 /** Codes after which the user must sign in again. */
 export const SIGN_IN_AGAIN_CODES = new Set([
@@ -74,6 +75,7 @@ export async function apiErrorFromResponse(response: Response): Promise<ApiError
 /** The message to show for any error thrown by an API call. */
 export function errorMessage(error: unknown): string {
   if (error instanceof ApiError) return error.message;
+  if (error instanceof Error && error.name === "SseProtocolError") return STREAM_INTERRUPTED;
   if (error instanceof TypeError) return NETWORK_ERROR; // fetch network failure
   return GENERIC_ERROR;
 }
