@@ -17,7 +17,7 @@ from app.services.coefficients import (
 )
 from app.services.geocoder import GeoResult, geocoder
 from app.services.numbers import jsonable_rows, money, to_decimal, usable_range
-from app.services.zone_lookup import ZoneResult, find_zone, get_latest_semester
+from app.services.zone_lookup import ZoneResult, find_zone, get_latest_semester, semester_is_complete
 
 
 # ---------------------------------------------------------------------------
@@ -42,6 +42,8 @@ async def geocode_and_find_zone(
         semester = await get_latest_semester(db)
         if not semester:
             raise ValueError("No data available in the database")
+    elif not await semester_is_complete(semester, db):
+        raise ValueError(f"Semester {semester} is not available")
 
     zone = await find_zone(coords.lat, coords.lng, semester, db)
     if not zone:

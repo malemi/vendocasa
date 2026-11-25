@@ -12,7 +12,6 @@ import re
 from pathlib import Path
 
 import pandas as pd
-from sqlalchemy import create_engine, text
 
 logger = logging.getLogger(__name__)
 
@@ -30,16 +29,17 @@ def parse_semester_from_filename(filename: str) -> str | None:
     return None
 
 
-def import_quotations(csv_path: str, semester: str, db_url: str) -> int:
-    """Import a single OMI quotation CSV into the database.
+def prepare_quotations(csv_path: str, semester: str) -> tuple[str, int]:
+    """Read a single OMI quotation CSV and return its COPY text and row count.
 
     Args:
         csv_path: Path to the semicolon-delimited CSV file.
         semester: Semester string, e.g. "2024_S2".
-        db_url: PostgreSQL connection string.
 
     Returns:
-        Number of rows imported.
+        (tab-separated text for COPY, number of rows). Nothing is written to
+        the database; copy_quotations() loads the text inside the semester's
+        import transaction (scripts/import_omi.py).
     """
     logger.info(f"Reading {csv_path} for semester {semester}")
 
@@ -58,7 +58,7 @@ def import_quotations(csv_path: str, semester: str, db_url: str) -> int:
 
     if df.empty:
         logger.warning(f"Empty CSV: {csv_path}")
-        return 0
+        return "", 0
 
     # Strip whitespace from column names and all string values
     df.columns = df.columns.str.strip()
@@ -159,49 +159,28 @@ def import_quotations(csv_path: str, semester: str, db_url: str) -> int:
         # Sanitize embedded tabs/newlines that would corrupt TSV
         output[col] = output[col].str.replace(r"[\t\n\r]", " ", regex=True)
 
-    # Use PostgreSQL COPY for bulk loading (no parameter limits, fastest method)
-    engine = create_engine(db_url)
+    buf = io.StringIO()
+    output.to_csv(buf, sep="\t", header=False, index=False, na_rep="\\N")
+    logger.info(f"Prepared {len(output)} quotation rows for {semester}")
+    return buf.getvalue(), len(output)
 
-    # Delete any existing data for this semester (safe re-import on retry)
-    with engine.begin() as conn:
-        deleted = conn.execute(
-            text("DELETE FROM omi.quotations WHERE semester = :sem"),
-            {"sem": semester},
-        )
-        if deleted.rowcount > 0:
-            logger.info(f"Deleted {deleted.rowcount} existing rows for {semester}")
 
-    raw_conn = engine.raw_connection()
-    try:
-        cursor = raw_conn.cursor()
-        buf = io.StringIO()
-        output.to_csv(buf, sep="\t", header=False, index=False, na_rep="\\N")
-        buf.seek(0)
+def copy_quotations(conn, copy_text: str) -> None:
+    """COPY prepared quotation rows on `conn` (a SQLAlchemy Connection), inside
+    its current transaction. Any failure, a duplicate key included, raises:
+    the semester's import then rolls back as a whole."""
+    dbapi_conn = conn.connection.dbapi_connection
+    with dbapi_conn.cursor() as cursor:
         with cursor.copy(
             "COPY omi.quotations (link_zona, semester, property_type_code,"
             " property_type_desc, conservation_state, is_prevalent,"
             " price_min, price_max, surface_type_sale,"
             " rent_min, rent_max, surface_type_rent) FROM STDIN"
         ) as copy:
-            while data := buf.read(8192):
-                copy.write(data.encode("utf-8"))
-        raw_conn.commit()
-        total = len(output)
-    except Exception as e:
-        raw_conn.rollback()
-        if "duplicate key" in str(e).lower() or "unique" in str(e).lower():
-            logger.info(f"Skipping duplicates for {semester}")
-            total = 0
-        else:
-            raise
-    finally:
-        raw_conn.close()
-
-    logger.info(f"Imported {total} quotation rows for {semester}")
-    return total
+            copy.write(copy_text.encode("utf-8"))
 
 
-def import_zone_descriptions(csv_path: str, semester: str, db_url: str) -> dict:
+def import_zone_descriptions(csv_path: str, semester: str) -> dict:
     """Import ZONE CSV and return a lookup dict: (belfiore_code, zone_code) -> {link_zona, ...}.
 
     This is used by the KML importer to resolve LinkZona from CODCOM + CODZONA.

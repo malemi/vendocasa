@@ -84,18 +84,34 @@ async def find_zone(
     return None
 
 
+# A semester is selectable only when omi.semester_import records its import as
+# complete (scripts/import_omi.py; backfilled by migration 0005). Rows of a
+# partial or failed import are never offered as data.
+
 async def get_latest_semester(db: AsyncSession) -> str | None:
-    """Return the most recent semester available in the database."""
+    """Return the most recent semester whose import is complete."""
     result = await db.execute(
-        text("SELECT DISTINCT semester FROM omi.zones ORDER BY semester DESC LIMIT 1")
+        text(
+            "SELECT semester FROM omi.semester_import WHERE status = 'complete' "
+            "ORDER BY semester DESC LIMIT 1"
+        )
     )
     row = result.first()
     return row[0] if row else None
 
 
 async def get_all_semesters(db: AsyncSession) -> list[str]:
-    """Return all available semesters, most recent first."""
+    """Return all semesters whose import is complete, most recent first."""
     result = await db.execute(
-        text("SELECT DISTINCT semester FROM omi.zones ORDER BY semester DESC")
+        text("SELECT semester FROM omi.semester_import WHERE status = 'complete' ORDER BY semester DESC")
     )
-    return [row[0] for row in result]
+    return [row[0] for row in result.all()]
+
+
+async def semester_is_complete(semester: str, db: AsyncSession) -> bool:
+    """True when an explicitly requested semester may be used."""
+    result = await db.execute(
+        text("SELECT 1 FROM omi.semester_import WHERE semester = :s AND status = 'complete'"),
+        {"s": semester},
+    )
+    return result.first() is not None

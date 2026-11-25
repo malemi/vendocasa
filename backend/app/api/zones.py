@@ -5,7 +5,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.services.zone_lookup import find_zone, get_latest_semester
+from app.services.zone_lookup import find_zone, get_latest_semester, semester_is_complete
 
 router = APIRouter()
 
@@ -25,6 +25,8 @@ async def zones_geojson(
         semester = await get_latest_semester(db)
         if not semester:
             raise HTTPException(404, "No data available")
+    elif not await semester_is_complete(semester, db):
+        raise HTTPException(404, f"Semester {semester} is not available")
 
     # A bounding box is required, and the response is capped at GEOJSON_MAX_ZONES
     # zones: the whole country in one response would be tens of megabytes.
@@ -110,6 +112,8 @@ async def zone_by_coordinates(
         semester = await get_latest_semester(db)
         if not semester:
             raise HTTPException(404, "No data available")
+    elif not await semester_is_complete(semester, db):
+        raise HTTPException(404, f"Semester {semester} is not available")
 
     zone = await find_zone(lat, lng, semester, db)
     if not zone:
@@ -138,6 +142,8 @@ async def get_quotations(
         semester = await get_latest_semester(db)
         if not semester:
             raise HTTPException(404, "No data available")
+    elif not await semester_is_complete(semester, db):
+        raise HTTPException(404, f"Semester {semester} is not available")
 
     result = await db.execute(
         text("""

@@ -20,6 +20,7 @@ from app.services import spending
 from app.services.coefficients import get_coefficient_options
 from app.services.pricing import actual_call_cost_micro, max_call_cost_micro
 from app.services.numbers import jsonable_rows
+from app.services.zone_lookup import semester_is_complete
 from app.services.tool_inputs import (
     DETAIL_FIELDS,
     CoefficientInfoInput,
@@ -574,6 +575,8 @@ async def execute_tool(
         return {"factors": get_coefficient_options()}
 
     if isinstance(args, ZoneQuotationsInput):
+        if not await semester_is_complete(args.semester, db):
+            raise ValueError(f"Semester {args.semester} is not available")
         rows = await get_quotations(
             link_zona=args.link_zona,
             semester=args.semester,

@@ -14,7 +14,7 @@ from pathlib import Path
 from lxml import etree
 from shapely.geometry import MultiPolygon, Polygon
 from shapely import wkt
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
 
@@ -104,13 +104,10 @@ def parse_kml_placemarks(kml_path: str) -> list[dict]:
             else:
                 continue
 
-        # Parse all polygons (may be inside MultiGeometry or direct)
-        polygons = []
-        for coords_el in pm.iter("{http://www.opengis.net/kml/2.2}coordinates"):
-            if coords_el.text:
-                poly = _parse_coordinates(coords_el.text.strip())
-                if poly is not None:
-                    polygons.append(poly)
+        # Each <Polygon> (direct, or one of several in a MultiGeometry) has one
+        # outer boundary and any number of inner boundaries, which are holes.
+        polygons = [poly for poly_el in pm.iter(f"{KML_NS}Polygon")
+                    if (poly := _parse_polygon(poly_el)) is not None]
 
         if not polygons:
             continue
@@ -127,174 +124,83 @@ def parse_kml_placemarks(kml_path: str) -> list[dict]:
     return zones
 
 
-def _parse_coordinates(coord_text: str) -> Polygon | None:
-    """Parse KML coordinate string into a Shapely Polygon.
+KML_NS = "{http://www.opengis.net/kml/2.2}"
 
-    Format: "lng,lat,alt lng,lat,alt ..."
-    """
+
+def _ring_text(boundary_el) -> str | None:
+    coords_el = boundary_el.find(f"{KML_NS}LinearRing/{KML_NS}coordinates")
+    return coords_el.text.strip() if coords_el is not None and coords_el.text else None
+
+
+def _parse_ring(coord_text: str) -> list[tuple[float, float]] | None:
+    """Parse "lng,lat,alt lng,lat,alt ..." into a closed ring, or None."""
     points = []
     for triplet in coord_text.split():
         parts = triplet.split(",")
         if len(parts) >= 2:
             try:
-                lng = float(parts[0])
-                lat = float(parts[1])
-                points.append((lng, lat))
+                points.append((float(parts[0]), float(parts[1])))
             except ValueError:
                 continue
-
-    if len(points) >= 3:
-        # Ensure ring is closed
-        if points[0] != points[-1]:
-            points.append(points[0])
-        try:
-            return Polygon(points)
-        except Exception:
-            return None
-    return None
+    if len(points) < 3:
+        return None
+    if points[0] != points[-1]:
+        points.append(points[0])
+    return points
 
 
-def import_kml_zones(
-    kml_dir: str,
-    semester: str,
-    zone_lookup: dict,
-    db_url: str,
-) -> int:
-    """Import all KML files from a directory into PostGIS.
+def _parse_polygon(polygon_el) -> Polygon | None:
+    """A KML <Polygon>: its outerBoundaryIs is the shell, each innerBoundaryIs a hole."""
+    outer = polygon_el.find(f"{KML_NS}outerBoundaryIs")
+    shell_text = _ring_text(outer) if outer is not None else None
+    shell = _parse_ring(shell_text) if shell_text else None
+    if shell is None:
+        return None
+    holes = []
+    for inner in polygon_el.findall(f"{KML_NS}innerBoundaryIs"):
+        hole_text = _ring_text(inner)
+        hole = _parse_ring(hole_text) if hole_text else None
+        if hole is not None:
+            holes.append(hole)
+    try:
+        return Polygon(shell, holes)
+    except Exception:
+        return None
 
-    Args:
-        kml_dir: Directory containing KML files.
-        semester: Semester string, e.g. "2025_S1".
-        zone_lookup: Dict from import_zone_descriptions: (belfiore_code, zone_code) -> row data.
-        db_url: PostgreSQL connection string.
 
-    Returns:
-        Number of zones imported.
+def collect_zone_rows(kml_dir: str, semester: str, zone_lookup: dict) -> tuple[list[dict], int]:
+    """Parse every KML file in `kml_dir` into zone rows ready to insert.
+
+    Returns (rows, skipped). A row's `source_file` names its KML file, so a
+    rejected row can be reported with its origin. Placemarks with no matching
+    ZONE CSV entry are skipped and counted; they are not errors.
     """
     kml_files = sorted(Path(kml_dir).glob("*.kml"))
     logger.info(f"Found {len(kml_files)} KML files in {kml_dir}")
 
-    engine = create_engine(db_url)
-    total = 0
-    skipped_no_lookup = 0
-
-    for kml_path in kml_files:
-        placemarks = parse_kml_placemarks(str(kml_path))
-        if not placemarks:
-            continue
-
-        for pm in placemarks:
-            codcom = pm["codcom"]
-            codzona = pm["codzona"]
-            geom = pm["geometry"]
-
-            # Look up zone metadata from ZONE CSV
-            key = (codcom, codzona)
-            zone_info = zone_lookup.get(key)
-
-            if zone_info is None:
-                skipped_no_lookup += 1
-                continue
-
-            link_zona = zone_info["link_zona"]
-            if not link_zona or not re.match(r"^[A-Z]{2}\d{8}$", link_zona):
-                skipped_no_lookup += 1
-                continue
-
-            wkt_geom = geom.wkt
-
-            try:
-                with engine.begin() as conn:
-                    conn.execute(
-                        text("""
-                            INSERT INTO omi.zones
-                                (link_zona, zone_code, fascia, municipality_istat,
-                                 municipality_name, province_code, zone_description,
-                                 semester, geom)
-                            VALUES
-                                (:link_zona, :zone_code, :fascia, :municipality_istat,
-                                 :municipality_name, :province_code, :zone_description,
-                                 :semester, ST_Multi(ST_CollectionExtract(ST_MakeValid(ST_GeomFromText(:wkt, 4326)), 3)))
-                            ON CONFLICT (link_zona, semester) DO NOTHING
-                        """),
-                        {
-                            "link_zona": link_zona,
-                            "zone_code": zone_info["zone_code"],
-                            "fascia": zone_info["fascia"],
-                            "municipality_istat": zone_info["municipality_istat"],
-                            "municipality_name": zone_info["municipality_name"],
-                            "province_code": zone_info["province_code"],
-                            "zone_description": zone_info["zone_description"],
-                            "semester": semester,
-                            "wkt": wkt_geom,
-                        },
-                    )
-                total += 1
-            except Exception as e:
-                if "duplicate" in str(e).lower():
-                    pass  # Already exists
-                else:
-                    logger.error(f"Error importing zone {link_zona} from {kml_path.name}: {e}")
-
-    if skipped_no_lookup > 0:
-        logger.warning(
-            f"Skipped {skipped_no_lookup} KML placemarks with no matching ZONE CSV entry"
-        )
-    logger.info(f"Imported {total} zone polygons for {semester}")
-    return total
-
-
-def import_kml_zones_batch(
-    kml_dir: str,
-    semester: str,
-    zone_lookup: dict,
-    db_url: str,
-    batch_size: int = 500,
-) -> int:
-    """Batch version of KML import for better performance.
-
-    Collects zones into batches and inserts them in bulk.
-    """
-    kml_files = sorted(Path(kml_dir).glob("*.kml"))
-    logger.info(f"Found {len(kml_files)} KML files in {kml_dir}")
-
-    engine = create_engine(db_url)
-    total = 0
+    rows: list[dict] = []
     skipped = 0
-    batch = []
-
     # Build reverse index: link_zona -> zone_info (for older KMLs with direct LINKZONA)
     lz_reverse = {v["link_zona"]: v for v in zone_lookup.values() if v.get("link_zona")}
 
     for kml_path in kml_files:
-        placemarks = parse_kml_placemarks(str(kml_path))
-        for pm in placemarks:
+        for pm in parse_kml_placemarks(str(kml_path)):
             # Older KMLs have LINKZONA directly; newer ones need lookup via CODCOM+CODZONA
             direct_lz = pm.get("link_zona", "")
             if direct_lz and re.match(r"^[A-Z]{2}\d{8}$", direct_lz):
                 link_zona = direct_lz
-                zone_info = lz_reverse.get(direct_lz, {
-                    "zone_code": "",
-                    "fascia": "",
-                    "municipality_istat": "",
-                    "municipality_name": "",
-                    "province_code": "",
-                    "zone_description": "",
-                })
+                zone_info = lz_reverse.get(direct_lz, {})
             else:
-                key = (pm["codcom"], pm["codzona"])
-                zone_info = zone_lookup.get(key)
-
+                zone_info = zone_lookup.get((pm["codcom"], pm["codzona"]))
                 if zone_info is None:
                     skipped += 1
                     continue
-
                 link_zona = zone_info["link_zona"]
                 if not link_zona or not re.match(r"^[A-Z]{2}\d{8}$", link_zona):
                     skipped += 1
                     continue
 
-            batch.append({
+            rows.append({
                 "link_zona": link_zona,
                 "zone_code": zone_info.get("zone_code", ""),
                 "fascia": zone_info.get("fascia", ""),
@@ -304,47 +210,46 @@ def import_kml_zones_batch(
                 "zone_description": zone_info.get("zone_description", ""),
                 "semester": semester,
                 "wkt": pm["geometry"].wkt,
+                "source_file": kml_path.name,
             })
 
-            if len(batch) >= batch_size:
-                total += _insert_batch(engine, batch)
-                batch = []
-
-    # Flush remaining
-    if batch:
-        total += _insert_batch(engine, batch)
-
-    if skipped > 0:
+    if skipped:
         logger.warning(f"Skipped {skipped} KML placemarks with no matching ZONE CSV entry")
-    logger.info(f"Imported {total} zone polygons for {semester}")
-    return total
+    return rows, skipped
 
 
-def _insert_batch(engine, batch: list[dict]) -> int:
-    """Insert a batch of zone records using SAVEPOINTs for error isolation."""
+def insert_zone_rows(conn, rows: list[dict]) -> tuple[int, list[dict]]:
+    """Insert zone rows on `conn` inside its current transaction.
+
+    Each row runs in a savepoint, so one bad geometry does not hide the others:
+    every rejected row is collected with its file, zone and error. The caller
+    decides what a rejection means; the importer rolls the semester back.
+    Returns (inserted, rejected).
+    """
     inserted = 0
-    with engine.begin() as conn:
-        for row in batch:
-            try:
-                conn.execute(text("SAVEPOINT sp"))
-                result = conn.execute(
-                    text("""
-                        INSERT INTO omi.zones
-                            (link_zona, zone_code, fascia, municipality_istat,
-                             municipality_name, province_code, zone_description,
-                             semester, geom)
-                        VALUES
-                            (:link_zona, :zone_code, :fascia, :municipality_istat,
-                             :municipality_name, :province_code, :zone_description,
-                             :semester, ST_Multi(ST_CollectionExtract(ST_MakeValid(ST_GeomFromText(:wkt, 4326)), 3)))
-                        ON CONFLICT (link_zona, semester) DO NOTHING
-                    """),
-                    row,
-                )
-                conn.execute(text("RELEASE SAVEPOINT sp"))
-                if result.rowcount > 0:
-                    inserted += 1
-            except Exception as e:
-                conn.execute(text("ROLLBACK TO SAVEPOINT sp"))
-                logger.error(f"Error inserting zone {row['link_zona']}: {e}")
-    return inserted
+    rejected: list[dict] = []
+    for row in rows:
+        params = {k: v for k, v in row.items() if k != "source_file"}
+        savepoint = conn.begin_nested()
+        try:
+            result = conn.execute(
+                text("""
+                    INSERT INTO omi.zones
+                        (link_zona, zone_code, fascia, municipality_istat,
+                         municipality_name, province_code, zone_description,
+                         semester, geom)
+                    VALUES
+                        (:link_zona, :zone_code, :fascia, :municipality_istat,
+                         :municipality_name, :province_code, :zone_description,
+                         :semester, ST_Multi(ST_CollectionExtract(ST_MakeValid(ST_GeomFromText(:wkt, 4326)), 3)))
+                    ON CONFLICT (link_zona, semester) DO NOTHING
+                """),
+                params,
+            )
+            savepoint.commit()
+            inserted += result.rowcount
+        except Exception as exc:
+            savepoint.rollback()
+            rejected.append({"file": row.get("source_file"), "link_zona": row["link_zona"],
+                             "error": str(exc).splitlines()[0][:300]})
+    return inserted, rejected

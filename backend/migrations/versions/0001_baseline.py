@@ -1,4 +1,4 @@
-"""Baseline: the OMI schema as created by backend/sql/001_schema.sql.
+"""Baseline: the OMI schema as the importer created it before migrations existed.
 
 Every statement is idempotent, so this migration is a no-op on a database
 that the importer already initialized (production) and creates the same
