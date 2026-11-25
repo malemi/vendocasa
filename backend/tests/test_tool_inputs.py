@@ -86,3 +86,39 @@ def test_geocoder_precision_is_exact_only_for_building_level_matches():
     assert _google_precision({"geometry": {"location_type": "ROOFTOP"}}) == "exact"
     assert _google_precision({"geometry": {"location_type": "GEOMETRIC_CENTER"}}) == "approximate"
     assert _photon_precision({}) == "approximate"
+
+
+# The direct valuation routes apply the tools' surface rule to their own input.
+
+@pytest.fixture
+def no_valuation(monkeypatch):
+    calls = []
+
+    async def _never(*args, **kwargs):
+        calls.append((args, kwargs))
+        raise AssertionError("a valuation ran with an unusable surface")
+
+    monkeypatch.setattr("app.api.valuations.valuate_address", _never)
+    monkeypatch.setattr("app.api.valuations.enhanced_valuate_address", _never)
+    return calls
+
+
+@pytest.mark.parametrize("surface", ["NaN", "Infinity", "0"])
+def test_the_enhanced_route_refuses_an_unusable_surface(client, no_valuation, surface):
+    from tests.auth_helpers import auth_headers
+
+    body = '{"address": "Via Roma 1, Milano", "surface_m2": %s, "details": {}}' % surface
+    response = client.post("/api/valuate/enhanced", content=body,
+                           headers={**auth_headers(), "content-type": "application/json"})
+    assert response.status_code == 422
+    assert no_valuation == []
+
+
+@pytest.mark.parametrize("surface", ["nan", "0"])
+def test_the_basic_route_refuses_an_unusable_surface(client, no_valuation, surface):
+    from tests.auth_helpers import auth_headers
+
+    response = client.get("/api/valuate", params={"address": "Via Roma 1, Milano", "surface_m2": surface},
+                          headers=auth_headers())
+    assert response.status_code == 422
+    assert no_valuation == []

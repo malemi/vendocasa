@@ -7,6 +7,7 @@ from app.database import get_db
 from app.services import spending
 from app.schemas.enhanced_valuation import EnhancedValuationRequest
 from app.services.coefficients import get_coefficient_options
+from app.services.tool_inputs import MAX_SURFACE_M2
 from app.services.valuation import enhanced_valuate_address, valuate_address
 
 router = APIRouter()
@@ -20,7 +21,8 @@ router = APIRouter()
 async def valuate(
     address: str = Query(..., description="Italian address to valuate"),
     property_type: int = Query(20, description="Property type code (20=Abitazioni civili)"),
-    surface_m2: float | None = Query(None, description="Surface area in m2 for total estimate"),
+    surface_m2: float | None = Query(None, gt=0, le=MAX_SURFACE_M2, allow_inf_nan=False,
+                                     description="Surface area in m2 for total estimate"),
     semester: str | None = Query(None, description="Semester, e.g. 2024_S2"),
     db: AsyncSession = Depends(get_db),
     account: Account = Depends(current_account),

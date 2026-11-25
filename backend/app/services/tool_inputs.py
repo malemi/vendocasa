@@ -8,12 +8,17 @@ of an exception that would break a stream already in progress.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 SEMESTER_PATTERN = r"^\d{4}_S[12]$"
 LINK_ZONA_PATTERN = r"^[A-Z0-9]{2,12}$"
+MAX_SURFACE_M2 = 100_000
+
+# A usable surface: finite, above zero and not absurd. The direct valuation
+# routes apply the same rule (app/api/valuations.py, app/schemas/enhanced_valuation.py).
+SurfaceM2 = Annotated[float, Field(gt=0, le=MAX_SURFACE_M2, allow_inf_nan=False)]
 
 
 class _Strict(BaseModel):
@@ -23,12 +28,12 @@ class _Strict(BaseModel):
 class ValuatePropertyInput(_Strict):
     address: str = Field(min_length=3, max_length=300)
     property_type: int = Field(20, ge=1, le=99)
-    surface_m2: float | None = Field(None, gt=0, le=100_000, allow_inf_nan=False)
+    surface_m2: SurfaceM2 | None = None
     semester: str | None = Field(None, pattern=SEMESTER_PATTERN)
 
 
 class EnhancedValuatePropertyInput(ValuatePropertyInput):
-    surface_m2: float = Field(gt=0, le=100_000, allow_inf_nan=False)
+    surface_m2: SurfaceM2
     conservation_state: Literal["OTTIMO", "NORMALE", "SCADENTE"] = "NORMALE"
     renovation: Literal["premium_post_2015", "standard_recent", "none", "needs_work"] | None = None
     floor: Literal["ground_semi", "first", "second", "third_fourth", "fifth_plus", "penthouse"] | None = None

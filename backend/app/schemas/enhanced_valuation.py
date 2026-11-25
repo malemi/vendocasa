@@ -2,6 +2,8 @@
 
 from pydantic import BaseModel
 
+from app.services.tool_inputs import SurfaceM2
+
 
 class PropertyDetails(BaseModel):
     """User-provided property characteristics for coefficient adjustment."""
@@ -19,7 +21,7 @@ class PropertyDetails(BaseModel):
 class EnhancedValuationRequest(BaseModel):
     """Request body for the enhanced valuation endpoint."""
     address: str
-    surface_m2: float
+    surface_m2: SurfaceM2
     property_type: int = 20
     semester: str | None = None
     details: PropertyDetails
