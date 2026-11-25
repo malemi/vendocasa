@@ -12,6 +12,8 @@ from geopy.geocoders import GoogleV3, Nominatim, Photon
 from geopy.extra.rate_limiter import RateLimiter
 
 from app.config import settings
+from app.services import spending
+from app.services.pricing import google_geocoding_cost_micro
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +108,22 @@ class ItalianGeocoder:
         return None
 
     async def _try_google(self, address: str) -> GeoResult | None:
+        """One paid Google request, charged to the requesting account.
+
+        Google bills every request, so each one is reserved before it is sent
+        and settled at its price whatever the result. Without an account to
+        charge, or when the caps or the switch refuse, Google is skipped.
+        """
+        account_id = spending.charged_account.get()
+        if account_id is None:
+            logger.warning("Google geocoding skipped: no account to charge")
+            return None
+        cost = google_geocoding_cost_micro()
+        try:
+            reservation = await spending.reserve(account_id, "geocoding", cost)
+        except spending.SpendRefused as refused:
+            logger.info("Google geocoding skipped: %s", refused.code)
+            return None
         try:
             loc = await asyncio.to_thread(
                 self.google.geocode, address, region="it"
@@ -115,6 +133,8 @@ class ItalianGeocoder:
                 return GeoResult(lat=loc.latitude, lng=loc.longitude, source="google")
         except Exception as e:
             logger.warning("Google failed for '%s': %s", address, e)
+        finally:
+            await spending.settle(reservation, cost)
         return None
 
 

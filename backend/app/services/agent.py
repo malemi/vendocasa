@@ -6,6 +6,7 @@ conversational property valuations backed by OMI data.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from collections.abc import AsyncGenerator
@@ -15,7 +16,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.refusals import refusal
+from app.services import spending
 from app.services.coefficients import get_coefficient_options
+from app.services.pricing import actual_call_cost_micro, max_call_cost_micro
 from app.services.rate_limit import rate_limiter
 from app.services.valuation import (
     enhanced_valuate_address,
@@ -587,109 +590,160 @@ def _serialize(obj: object) -> str:
 async def run_agent_stream(
     messages: list[dict],
     db: AsyncSession,
+    account_id: str,
 ) -> AsyncGenerator[str, None]:
     """Run the agent loop with streaming, yielding SSE-formatted events.
+
+    Every model call is charged to `account_id` (app/services/spending.py):
+    the call's maximum cost is reserved before it starts, and settled at the
+    actual cost afterwards, or at the full reservation if the outcome is
+    unknown (provider error, timeout, cancellation).
 
     Event types:
       text_delta  - {"text": "..."}  streamed text tokens
       tool_result - {"tool": "...", "result": {...}}  structured data for inline cards
       done        - {}  stream complete
-      error       - {"message": "..."}  error occurred
+      error       - {"error": code, "message": "..."}  Italian user message
     """
     # base_url is passed explicitly so an ambient ANTHROPIC_BASE_URL
     # environment variable can never redirect the request (and the
     # x-api-key header with it) to a host this application did not choose.
+    # No automatic retries: a retry would be an unreserved paid call.
     client = AsyncAnthropic(
         api_key=settings.anthropic_api_key,
         base_url=settings.anthropic_base_url,
+        max_retries=0,
+        timeout=settings.agent_call_timeout_seconds,
     )
+    model = settings.anthropic_model
+    # The fixed prefix (tools, then system) carries an explicit cache
+    # breakpoint; the top-level cache_control caches the growing conversation.
+    system = [{"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}]
 
     # The messages list is mutated during the tool loop (assistant + tool_result
     # messages are appended). We work on a copy so the caller's list is untouched.
     api_messages = list(messages)
 
     max_tool_rounds = settings.agent_max_tool_rounds  # bounds worst-case cost per request
+    charge_token = spending.charged_account.set(account_id)
+    try:
+        for _round in range(max_tool_rounds):
+            # Global circuit breaker: each round is one real Anthropic API call.
+            call_decision = rate_limiter.record_model_call()
+            if not call_decision.allowed:
+                logger.warning("Global daily model-call ceiling reached mid-request")
+                yield _sse_error("daily_limit")
+                yield "event: done\ndata: {}\n\n"
+                return
 
-    for _round in range(max_tool_rounds):
-        # Global circuit breaker: each round is one real Anthropic API call.
-        # The door-level check in the /api/chat endpoint (rate_limiter.peek_global_model_calls)
-        # rejects new requests once the service has already exhausted its daily
-        # ceiling; this per-round check additionally stops a single request's
-        # own tool-calling loop from pushing the service over the ceiling.
-        call_decision = rate_limiter.record_model_call()
-        if not call_decision.allowed:
-            logger.warning("Global daily model-call ceiling reached mid-request")
-            yield f"event: error\ndata: {_serialize(refusal('daily_limit'))}\n\n"
-            yield "event: done\ndata: {}\n\n"
-            return
-
-        # Stream Claude's response
-        try:
-            response = None
-            async with client.messages.stream(
-                model=settings.anthropic_model,
-                max_tokens=settings.agent_max_tokens,
-                system=SYSTEM_PROMPT,
-                tools=TOOLS,
-                messages=api_messages,
-            ) as stream:
-                async for event in stream:
-                    if (
-                        event.type == "content_block_delta"
-                        and hasattr(event.delta, "text")
-                    ):
-                        yield f"event: text_delta\ndata: {_serialize({'text': event.delta.text})}\n\n"
-
-                response = await stream.get_final_message()
-
-        except Exception:
-            # Never forward provider error detail (status, rate-limit info) to an
-            # anonymous caller -- log it server-side and send a generic message.
-            logger.exception("Anthropic API error")
-            yield f"event: error\ndata: {_serialize(refusal('assistant_unavailable'))}\n\n"
-            return
-
-        # Check if Claude wants to call tools
-        tool_use_blocks = [b for b in response.content if b.type == "tool_use"]
-
-        if not tool_use_blocks:
-            # No tools — we're done
-            yield "event: done\ndata: {}\n\n"
-            return
-
-        # Append assistant message with tool_use content blocks
-        api_messages.append({"role": "assistant", "content": response.content})
-
-        # Execute each tool and collect results
-        tool_results = []
-        for tool_block in tool_use_blocks:
+            # Reserve the round's maximum cost before calling the model.
             try:
-                result = await execute_tool(tool_block.name, tool_block.input, db)
-
-                # Send structured data to frontend for inline rendering
-                yield (
-                    f"event: tool_result\n"
-                    f"data: {_serialize({'tool': tool_block.name, 'result': result})}\n\n"
+                counted = await client.messages.count_tokens(
+                    model=model, system=system, tools=TOOLS, messages=api_messages
                 )
+                amount = max_call_cost_micro(model, counted.input_tokens, settings.agent_max_tokens)
+            except Exception:
+                logger.exception("Could not size the model call (token count or price table)")
+                yield _sse_error("assistant_unavailable")
+                return
+            try:
+                reservation = await spending.reserve(account_id, "model", amount)
+            except spending.SpendRefused as refused:
+                yield _sse_error(refused.code)
+                yield "event: done\ndata: {}\n\n"
+                return
 
-                tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": tool_block.id,
-                    "content": _serialize(result),
-                })
+            actual_cost: int | None = None
+            response = None
+            try:
+                async with client.messages.stream(
+                    model=model,
+                    max_tokens=settings.agent_max_tokens,
+                    system=system,
+                    tools=TOOLS,
+                    messages=api_messages,
+                    cache_control={"type": "ephemeral"},
+                ) as stream:
+                    async for event in stream:
+                        if (
+                            event.type == "content_block_delta"
+                            and hasattr(event.delta, "text")
+                        ):
+                            yield f"event: text_delta\ndata: {_serialize({'text': event.delta.text})}\n\n"
 
-            except ValueError as exc:
-                logger.warning("Tool %s error: %s", tool_block.name, exc)
-                tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": tool_block.id,
-                    "content": _serialize({"error": str(exc)}),
-                    "is_error": True,
-                })
+                    response = await stream.get_final_message()
+                usage = getattr(response, "usage", None)
+                if usage is not None:
+                    actual_cost = actual_call_cost_micro(model, usage)
+            except Exception:
+                # Never forward provider error detail (status, rate-limit info) to
+                # the caller -- log it server-side and send a generic message.
+                logger.exception("Anthropic API error")
+                yield _sse_error("assistant_unavailable")
+                return
+            finally:
+                # Unknown usage (error, cancellation) settles the full reservation.
+                try:
+                    await asyncio.shield(spending.settle(reservation, actual_cost))
+                except Exception:
+                    logger.exception("Settlement failed; the stale-reservation sweep will settle it")
 
-        # Feed tool results back to Claude for the next round
-        api_messages.append({"role": "user", "content": tool_results})
-        # Loop continues — Claude will process tool results and respond
+            stop_reason = getattr(response, "stop_reason", None)
+            if stop_reason == "refusal":
+                yield _sse_error("model_refusal")
+                yield "event: done\ndata: {}\n\n"
+                return
+            if stop_reason == "max_tokens":
+                logger.warning("Model output reached max_tokens=%d", settings.agent_max_tokens)
 
-    # If we hit the safety limit, end gracefully
-    yield "event: done\ndata: {}\n\n"
+            # Check if Claude wants to call tools
+            tool_use_blocks = [b for b in response.content if b.type == "tool_use"]
+
+            if not tool_use_blocks:
+                # No tools — we're done
+                yield "event: done\ndata: {}\n\n"
+                return
+
+            # Append the complete assistant turn (thinking blocks included,
+            # unchanged) before the tool results.
+            api_messages.append({"role": "assistant", "content": response.content})
+
+            # Execute each tool and collect results
+            tool_results = []
+            for tool_block in tool_use_blocks:
+                try:
+                    result = await execute_tool(tool_block.name, tool_block.input, db)
+
+                    # Send structured data to frontend for inline rendering
+                    yield (
+                        f"event: tool_result\n"
+                        f"data: {_serialize({'tool': tool_block.name, 'result': result})}\n\n"
+                    )
+
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": tool_block.id,
+                        "content": _serialize(result),
+                    })
+
+                except ValueError as exc:
+                    logger.warning("Tool %s error: %s", tool_block.name, exc)
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": tool_block.id,
+                        "content": _serialize({"error": str(exc)}),
+                        "is_error": True,
+                    })
+
+            # Feed tool results back to Claude for the next round
+            api_messages.append({"role": "user", "content": tool_results})
+            # Loop continues — Claude will process tool results and respond
+
+        # If we hit the safety limit, end gracefully
+        yield "event: done\ndata: {}\n\n"
+    finally:
+        spending.charged_account.reset(charge_token)
+
+
+def _sse_error(code: str) -> str:
+    return f"event: error\ndata: {_serialize(refusal(code))}\n\n"

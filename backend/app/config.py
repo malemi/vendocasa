@@ -28,7 +28,7 @@ class Settings(BaseSettings):
 
     # The model is server-side configuration only -- nothing in a client
     # request can select or influence it.
-    anthropic_model: str = "claude-sonnet-4-20250514"
+    anthropic_model: str = "claude-sonnet-5-5"
     anthropic_base_url: str = DEFAULT_ANTHROPIC_BASE_URL
 
     # /docs and /openapi.json publish exactly which routes spend money on
@@ -46,12 +46,23 @@ class Settings(BaseSettings):
     agent_max_history_messages: int = 20
     agent_max_message_chars: int = 4000
     agent_max_tokens: int = 4096
+    # Per provider call, in seconds; well below the 15-minute window after
+    # which app/services/spending.py settles a reservation left open.
+    agent_call_timeout_seconds: float = 120.0
     # Total bytes of PDF/image attachments a single chat request may carry,
     # summed across every message and document_id (backend/app/api/chat.py).
     # AGENT_MAX_MESSAGE_CHARS bounds text only; without this, a request can
     # still attach AGENT_MAX_HISTORY_MESSAGES x 4 files x 5 MB and re-bill
     # that near the model's context window on every tool-calling round.
     agent_max_attachment_bytes: int = 15 * 1024 * 1024  # 15 MB
+
+    # Monthly spending caps in US dollars (app/services/spending.py): per
+    # account and in total across all accounts, per calendar month in UTC.
+    account_monthly_cap_usd: float = 1.0
+    global_monthly_cap_usd: float = 100.0
+
+    # Requests per minute per account on routes that cost no provider money.
+    route_requests_per_minute: int = 60
 
     @property
     def cors_origin_list(self) -> list[str]:

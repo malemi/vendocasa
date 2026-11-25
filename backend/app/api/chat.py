@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import logging
+import time
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -15,6 +16,7 @@ from app.auth import Account, current_account
 from app.config import settings
 from app.database import get_db
 from app.refusals import refusal
+from app.services import spending
 from app.services.agent import run_agent_stream
 from app.services.document_store import MAX_FILES_PER_MESSAGE, get_document
 from app.services.rate_limit import get_client_ip, rate_limiter
@@ -22,6 +24,23 @@ from app.services.rate_limit import get_client_ip, rate_limiter
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# HTTP status for each spending refusal raised before a stream opens.
+_SPEND_REFUSAL_STATUS = {"account_limit": 429, "global_limit": 503, "paused": 503,
+                         "assistant_unavailable": 503}
+
+# One active chat stream per account. An entry older than the longest possible
+# stream is ignored, so a stream whose cleanup never ran cannot lock an account.
+_MAX_STREAM_SECONDS = 600
+_active_streams: dict[str, float] = {}
+
+
+async def _release_when_done(account_id: str, stream):
+    try:
+        async for chunk in stream:
+            yield chunk
+    finally:
+        _active_streams.pop(account_id, None)
 
 
 class ChatMessage(BaseModel):
@@ -153,8 +172,21 @@ async def chat(
         else:
             api_messages.append({"role": m.role, "content": m.content})
 
+    try:
+        await spending.precheck(account.id)
+    except spending.SpendRefused as refused:
+        raise HTTPException(
+            status_code=_SPEND_REFUSAL_STATUS.get(refused.code, 503),
+            detail=refusal(refused.code),
+        ) from None
+
+    started = _active_streams.get(account.id)
+    if started is not None and time.monotonic() - started < _MAX_STREAM_SECONDS:
+        raise HTTPException(status_code=429, detail=refusal("concurrent"))
+    _active_streams[account.id] = time.monotonic()
+
     return StreamingResponse(
-        run_agent_stream(api_messages, db),
+        _release_when_done(account.id, run_agent_stream(api_messages, db, account.id)),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

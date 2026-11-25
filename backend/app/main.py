@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 import logging
 
 from fastapi import FastAPI
@@ -6,6 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.router import api_router
 from app.auth import AuthMiddleware
 from app.config import DEFAULT_ANTHROPIC_BASE_URL, settings
+from app.middleware import BodyLimitMiddleware
+from app.services import document_store, spending
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +46,42 @@ _docs_kwargs = (
     else {"docs_url": None, "redoc_url": None, "openapi_url": None}
 )
 
+SPEND_SWEEP_SECONDS = 300
+UPLOAD_SWEEP_SECONDS = 60
+
+
+async def _every(seconds: float, name: str, job) -> None:
+    """Run `job` now and then every `seconds`, logging (never raising) failures."""
+    while True:
+        try:
+            await job()
+        except Exception as exc:
+            logger.warning("%s failed: %s", name, type(exc).__name__)
+        await asyncio.sleep(seconds)
+
+
+async def _sweep_uploads() -> None:
+    document_store.cleanup_expired()
+
+
+@contextlib.asynccontextmanager
+async def lifespan(_app: FastAPI):
+    # Stale spending reservations (a crash mid-call) are settled in full, and
+    # expired uploads are deleted, at startup and periodically.
+    tasks = [
+        asyncio.create_task(_every(SPEND_SWEEP_SECONDS, "Spending sweep", spending.sweep_stale)),
+        asyncio.create_task(_every(UPLOAD_SWEEP_SECONDS, "Upload sweep", _sweep_uploads)),
+    ]
+    try:
+        yield
+    finally:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+
 app = FastAPI(
+    lifespan=lifespan,
     title="VendoCasa - Italian Real Estate Valuation",
     description="OMI-based property valuation for registered users",
     version="0.1.0",
@@ -50,9 +89,10 @@ app = FastAPI(
 )
 
 # Middleware order: the last one added is the outermost. CORS stays outside
-# authentication so preflight requests are answered and refusals carry CORS
-# headers the browser can read.
+# everything so preflight requests are answered and refusals carry CORS
+# headers the browser can read; body limits apply before authentication.
 app.add_middleware(AuthMiddleware)
+app.add_middleware(BodyLimitMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,

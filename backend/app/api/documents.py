@@ -13,6 +13,7 @@ from app.services.document_store import (
     ALLOWED_MEDIA_TYPES,
     IMAGE_MEDIA_TYPES,
     MAX_FILE_SIZE,
+    UploadStoreFull,
     store_document,
 )
 from app.services.rate_limit import get_client_ip, rate_limiter
@@ -61,13 +62,19 @@ async def upload_document(
             detail=f"Tipo file non supportato: {file.content_type}. Formati accettati: PDF, JPEG, PNG, WEBP, GIF.",
         )
 
-    # Read and validate size
-    data = await file.read()
-    if len(data) > MAX_FILE_SIZE:
-        raise HTTPException(
-            status_code=400,
-            detail=f"File troppo grande ({len(data)} bytes). Massimo {MAX_FILE_SIZE // (1024 * 1024)} MB.",
-        )
+    # Read at most MAX_FILE_SIZE + 1 bytes: enough to know the file is too large
+    # without holding an oversized upload in memory.
+    chunks: list[bytes] = []
+    received = 0
+    while received <= MAX_FILE_SIZE:
+        chunk = await file.read(min(64 * 1024, MAX_FILE_SIZE + 1 - received))
+        if not chunk:
+            break
+        chunks.append(chunk)
+        received += len(chunk)
+    if received > MAX_FILE_SIZE:
+        raise HTTPException(status_code=413, detail=refusal("too_large"))
+    data = b"".join(chunks)
 
     # Validate file content based on type
     if file.content_type == "application/pdf":
@@ -84,12 +91,16 @@ async def upload_document(
                 detail="Il file immagine sembra vuoto o corrotto.",
             )
 
-    doc = store_document(
-        owner_id=account.id,
-        filename=file.filename or "file",
-        media_type=file.content_type,
-        data=data,
-    )
+    try:
+        doc = store_document(
+            owner_id=account.id,
+            filename=file.filename or "file",
+            media_type=file.content_type,
+            data=data,
+        )
+    except UploadStoreFull as full:
+        status = 429 if full.code == "account_uploads_full" else 503
+        raise HTTPException(status_code=status, detail=refusal(full.code)) from None
     logger.info(
         "Document uploaded: %s (%s, %d bytes) by account %s",
         doc.doc_id, doc.media_type, doc.size, account.id,

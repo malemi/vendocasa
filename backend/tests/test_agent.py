@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from app.config import settings
+from app.services import pricing
 from app.services.agent import run_agent_stream
 from tests.fakes import (
     FakeResponse,
@@ -29,7 +30,7 @@ async def test_loop_stops_at_max_tool_rounds(monkeypatch):
     factory = make_fake_anthropic_factory([always_tool_use])
     monkeypatch.setattr("app.services.agent.AsyncAnthropic", factory)
 
-    events = await _collect(run_agent_stream([{"role": "user", "content": "Ciao"}], db=None))
+    events = await _collect(run_agent_stream([{"role": "user", "content": "Ciao"}], db=None, account_id="agent-test"))
 
     assert len(factory.instance.messages.calls) == 3
     assert any(e.startswith("event: done") for e in events)
@@ -49,7 +50,7 @@ async def test_loop_stops_early_when_global_ceiling_hit(monkeypatch):
     factory = make_fake_anthropic_factory([always_tool_use])
     monkeypatch.setattr("app.services.agent.AsyncAnthropic", factory)
 
-    events = await _collect(run_agent_stream([{"role": "user", "content": "Ciao"}], db=None))
+    events = await _collect(run_agent_stream([{"role": "user", "content": "Ciao"}], db=None, account_id="agent-test"))
 
     # Only one round should have actually called the model: the ceiling is 1.
     assert len(factory.instance.messages.calls) == 1
@@ -64,6 +65,8 @@ async def test_loop_stops_early_when_global_ceiling_hit(monkeypatch):
 async def test_model_id_is_server_config_only(monkeypatch):
     """The model sent to Anthropic always comes from settings, never the request."""
     monkeypatch.setattr(settings, "anthropic_model", "claude-sonnet-test-pin")
+    # A priced model: unpriced models are refused before any call (see below).
+    monkeypatch.setitem(pricing.MODEL_PRICES, "claude-sonnet-test-pin", pricing.MODEL_PRICES["claude-sonnet-5-5"])
 
     factory = make_fake_anthropic_factory([FakeResponse(content=[])])
     monkeypatch.setattr("app.services.agent.AsyncAnthropic", factory)
@@ -71,9 +74,24 @@ async def test_model_id_is_server_config_only(monkeypatch):
     # Even if a message dict smuggled in a "model" key, it has no effect --
     # run_agent_stream never reads a model id out of the message content.
     messages = [{"role": "user", "content": "Ciao", "model": "claude-opus-4-6"}]
-    await _collect(run_agent_stream(messages, db=None))
+    await _collect(run_agent_stream(messages, db=None, account_id="agent-test"))
 
     assert factory.instance.messages.calls[0]["model"] == "claude-sonnet-test-pin"
+    assert factory.instance.messages.counted[0]["model"] == "claude-sonnet-test-pin"
+
+
+@pytest.mark.asyncio
+async def test_an_unpriced_model_is_refused_before_any_call(monkeypatch, ledger):
+    """Without a price the call cannot be reserved, so it never starts."""
+    monkeypatch.setattr(settings, "anthropic_model", "claude-unpriced-model")
+    factory = make_fake_anthropic_factory([FakeResponse(content=[])])
+    monkeypatch.setattr("app.services.agent.AsyncAnthropic", factory)
+
+    events = await _collect(run_agent_stream([{"role": "user", "content": "Ciao"}], db=None, account_id="agent-test"))
+
+    assert factory.instance.messages.calls == []
+    assert ledger.open == {} and ledger.settlements == []
+    assert any('"error": "assistant_unavailable"' in e for e in events)
 
 
 @pytest.mark.asyncio
@@ -85,7 +103,7 @@ async def test_sse_error_event_never_forwards_raw_exception_text(monkeypatch):
     factory = make_raising_anthropic_factory(RuntimeError(secret_looking_message))
     monkeypatch.setattr("app.services.agent.AsyncAnthropic", factory)
 
-    events = await _collect(run_agent_stream([{"role": "user", "content": "Ciao"}], db=None))
+    events = await _collect(run_agent_stream([{"role": "user", "content": "Ciao"}], db=None, account_id="agent-test"))
 
     error_events = [e for e in events if e.startswith("event: error")]
     assert len(error_events) == 1
@@ -103,6 +121,6 @@ async def test_base_url_passed_explicitly(monkeypatch):
     factory = make_fake_anthropic_factory([FakeResponse(content=[])])
     monkeypatch.setattr("app.services.agent.AsyncAnthropic", factory)
 
-    await _collect(run_agent_stream([{"role": "user", "content": "Ciao"}], db=None))
+    await _collect(run_agent_stream([{"role": "user", "content": "Ciao"}], db=None, account_id="agent-test"))
 
     assert factory.instance.init_kwargs["base_url"] == "https://api.anthropic.com"

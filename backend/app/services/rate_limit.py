@@ -148,6 +148,15 @@ class RateLimiter:
                 return RateLimitDecision(False, retry_after, f"{label} limit exceeded")
         return RateLimitDecision(True)
 
+    def check_route(self, account_id: str) -> RateLimitDecision:
+        """Per-minute ceiling for routes that cost no provider money."""
+        allowed, retry_after = self._store.hit(
+            f"acct:{account_id}:route:minute", _MINUTE, settings.route_requests_per_minute
+        )
+        if not allowed:
+            return RateLimitDecision(False, retry_after, "per-minute route limit exceeded")
+        return RateLimitDecision(True)
+
     def peek_global_model_calls(self) -> RateLimitDecision:
         """Check the global daily model-call ceiling without consuming it.
 

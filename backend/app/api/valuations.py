@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import Account, current_account
 from app.database import get_db
+from app.services import spending
 from app.schemas.enhanced_valuation import EnhancedValuationRequest
 from app.services.coefficients import get_coefficient_options
 from app.services.valuation import enhanced_valuate_address, valuate_address
@@ -17,8 +19,10 @@ async def valuate(
     surface_m2: float | None = Query(None, description="Surface area in m2 for total estimate"),
     semester: str | None = Query(None, description="Semester, e.g. 2024_S2"),
     db: AsyncSession = Depends(get_db),
+    account: Account = Depends(current_account),
 ):
     """Main valuation endpoint. Geocodes an address and returns OMI zone + price data."""
+    spending.charged_account.set(account.id)  # a paid geocoding fallback is charged here
     try:
         result = await valuate_address(address, property_type, surface_m2, semester, db)
         return result
@@ -31,12 +35,14 @@ async def valuate(
 async def enhanced_valuate(
     request: EnhancedValuationRequest,
     db: AsyncSession = Depends(get_db),
+    account: Account = Depends(current_account),
 ):
     """Enhanced valuation with correction coefficients.
 
     Applies property-specific adjustments (floor, renovation, exposure, noise, etc.)
     on top of OMI zone data to produce a more accurate estimate.
     """
+    spending.charged_account.set(account.id)  # a paid geocoding fallback is charged here
     try:
         result = await enhanced_valuate_address(
             address=request.address,

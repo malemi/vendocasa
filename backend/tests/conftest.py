@@ -24,7 +24,8 @@ from app.database import get_db
 from app.main import app
 from app.services import disposable_domains
 from app.services.rate_limit import rate_limiter
-from tests.fakes import FakeResponse, make_fake_anthropic_factory
+from app.services import spending
+from tests.fakes import FakeLedger, FakeResponse, make_fake_anthropic_factory
 
 TEST_DISPOSABLE_DOMAINS = {"mailinator.com", "yopmail.com"}
 
@@ -84,3 +85,17 @@ def fake_anthropic(monkeypatch):
         return factory
 
     return _install
+
+
+@pytest.fixture(autouse=True)
+def ledger(monkeypatch):
+    """Unit tests use an in-memory ledger with the default caps ($1 and $100)."""
+    fake = FakeLedger()
+    monkeypatch.setattr(spending, "reserve", fake.reserve)
+    monkeypatch.setattr(spending, "settle", fake.settle)
+    monkeypatch.setattr(spending, "precheck", fake.precheck)
+    from app.api import chat
+
+    chat._active_streams.clear()
+    yield fake
+    chat._active_streams.clear()

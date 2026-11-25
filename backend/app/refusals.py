@@ -29,7 +29,13 @@ REFUSAL_MESSAGES: dict[str, str] = {
     ),
     "paused": "L'assistente è momentaneamente in pausa. Riprova più tardi.",
     "too_large": "Il file o la richiesta è troppo grande.",
+    "account_uploads_full": (
+        "Hai già caricato il massimo di documenti consentito. "
+        "I documenti scadono dopo 30 minuti: riprova più tardi."
+    ),
+    "uploads_full": "Il caricamento dei documenti è momentaneamente pieno. Riprova più tardi.",
     "concurrent": "C'è già una risposta in corso. Attendi che finisca.",
+    "model_refusal": "Non posso aiutarti con questa richiesta. Prova a riformularla.",
     # Not a refusal: the provider failed. Shown instead of the provider's error.
     "assistant_unavailable": "L'assistente non è al momento disponibile. Riprova tra poco.",
 }

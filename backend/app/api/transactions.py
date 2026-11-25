@@ -41,11 +41,14 @@ async def create_transaction(
 async def list_transactions(
     link_zona: str | None = Query(None),
     municipality: str | None = Query(None),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ):
-    """List transactions, optionally filtered by zone or municipality."""
+    """List transactions, optionally filtered by zone or municipality, one page
+    at a time (`limit` at most 100, ordered by date then ID for stable pages)."""
     conditions = []
-    params = {}
+    params: dict = {"limit": limit, "offset": offset}
 
     if link_zona:
         conditions.append("link_zona = :link_zona")
@@ -63,7 +66,8 @@ async def list_transactions(
                    cadastral_vani, cadastral_mq, cadastral_mc, notes, created_at
             FROM omi.transactions
             {where}
-            ORDER BY transaction_date DESC NULLS LAST
+            ORDER BY transaction_date DESC NULLS LAST, id DESC
+            LIMIT :limit OFFSET :offset
         """),
         params,
     )

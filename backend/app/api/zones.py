@@ -9,11 +9,14 @@ from app.services.zone_lookup import find_zone, get_latest_semester
 
 router = APIRouter()
 
+GEOJSON_MAX_ZONES = 500
+QUOTATIONS_MAX_ROWS = 200
+
 
 @router.get("/api/zones/geojson")
 # TODO: add response_model when a matching output schema is defined
 async def zones_geojson(
-    bbox: str | None = Query(None, description="Bounding box: min_lng,min_lat,max_lng,max_lat"),
+    bbox: str = Query(..., description="Bounding box: min_lng,min_lat,max_lng,max_lat"),
     semester: str | None = Query(None, description="Semester"),
     db: AsyncSession = Depends(get_db),
 ):
@@ -23,8 +26,9 @@ async def zones_geojson(
         if not semester:
             raise HTTPException(404, "No data available")
 
-    # Build query with optional bbox filter
-    params = {"semester": semester}
+    # A bounding box is required, and the response is capped at GEOJSON_MAX_ZONES
+    # zones: the whole country in one response would be tens of megabytes.
+    params = {"semester": semester, "limit": GEOJSON_MAX_ZONES}
     bbox_clause = ""
     if bbox:
         try:
@@ -63,6 +67,8 @@ async def zones_geojson(
             ) q ON true
             WHERE z.semester = :semester
             {bbox_clause}
+            ORDER BY z.link_zona
+            LIMIT :limit
         """),
         params,
     )
@@ -141,7 +147,8 @@ async def get_quotations(
             FROM omi.quotations
             WHERE link_zona = :link_zona AND semester = :semester
             ORDER BY property_type_code, is_prevalent DESC
+            LIMIT :limit
         """),
-        {"link_zona": link_zona, "semester": semester},
+        {"link_zona": link_zona, "semester": semester, "limit": QUOTATIONS_MAX_ROWS},
     )
     return [dict(row._mapping) for row in result.all()]
