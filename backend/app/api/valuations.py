@@ -64,8 +64,5 @@ async def enhanced_valuate(
 @router.get("/api/coefficients", dependencies=[Depends(route_quota)])
 # TODO: add response_model when a matching output schema is defined
 async def list_coefficients():
-    """Return all available correction coefficient factors and options.
-
-    Used by the frontend wizard to dynamically build the property details form.
-    """
+    """Return all available correction coefficient factors and options."""
     return {"factors": get_coefficient_options()}

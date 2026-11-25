@@ -213,6 +213,10 @@ __marimo__/
 data/*.zip
 data/*.csv
 data/*.kml
+# The importer's default DATA_DIR is ./data, relative to backend/.
+backend/data/*.zip
+backend/data/*.csv
+backend/data/*.kml
 
 # Frontend build output and dependencies
 frontend/node_modules/
