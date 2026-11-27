@@ -116,11 +116,13 @@ class Admin:
         return result.stdout.strip().splitlines()[-1]
 
     def routes(self) -> list[tuple[str, str]]:
-        code = ("from fastapi.routing import APIRoute\nfrom app.main import app\n"
-                "for r in app.routes:\n"
-                "    if isinstance(r, APIRoute):\n"
-                "        for m in sorted(r.methods):\n"
-                "            print(m, r.path)\n")
+        # The generated OpenAPI schema lists every route however routers are
+        # nested, as backend/tests/test_access.py reads it; app.routes holds
+        # included routers, not their routes.
+        code = ("from app.main import app\n"
+                "for path, operations in app.openapi()['paths'].items():\n"
+                "    for method in sorted(operations):\n"
+                "        print(method.upper(), path)\n")
         command = [str(HERE / "compose.sh"), self.project, "run", "--rm", "--no-deps", "-T", "backend",
                    "python", "-c", code]
         result = subprocess.run(command, capture_output=True, text=True, check=False)

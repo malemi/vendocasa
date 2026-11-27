@@ -28,7 +28,7 @@ mkdir -p "$dir"
 
 compose() { "$here/compose.sh" "$project" "$@"; }
 free_gb() { df -BG --output=avail "$dir" | tail -1 | tr -dc '0-9'; }
-log() { echo "backup.sh $(date -u +%FT%TZ) $project $mode: $*"; }
+log() { echo "backup.sh $(date -u +%FT%TZ) $project $mode: $*" >&2; }
 
 count_sql="SELECT table_schema || '.' || table_name, (xpath('/row/c/text()', query_to_xml(format('SELECT count(*) AS c FROM %I.%I', table_schema, table_name), false, true, '')))[1]::text FROM information_schema.tables WHERE table_schema IN ('app', 'auth', 'omi') AND table_type = 'BASE TABLE' ORDER BY 1"
 

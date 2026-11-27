@@ -149,9 +149,9 @@ services:
       args:
         VITE_SUPABASE_URL: ${PUBLIC_URL:?}
         VITE_SUPABASE_ANON_KEY: ${ANON_KEY:?}
-    depends_on:
-      backend: {condition: service_healthy}
-      auth: {condition: service_healthy}
+    # No start-up dependency: an upstream that is not ready answers 502 until
+    # it is. The rehearsal's harness backend seeds through the gateway's admin
+    # listener while it starts, so the gateway must not wait for it.
     environment:
       TRUSTED_PROXY: ${EDGE_GATEWAY:?}/32
     ports:
