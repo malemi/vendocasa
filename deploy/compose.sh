@@ -36,5 +36,19 @@ elif [ "${VENDOCASA_HARNESS:-0}" = 1 ]; then
   exit 2
 fi
 
+# Images are built only through deploy/build.sh, which tags them with the
+# commit they come from. A plain `build` or `up --build` would put new bytes
+# under a tag that names another commit, such as the rehearsed backend's.
+if [ "${VENDOCASA_BUILD:-0}" != 1 ]; then
+  for arg in "$@"; do
+    case "$arg" in
+      build | --build)
+        echo "compose.sh: build images with deploy/build.sh, not with compose $arg" >&2
+        exit 2
+        ;;
+    esac
+  done
+fi
+
 export BUILDX_BUILDER=default
 exec docker compose -p "$project" --env-file "$settings" "${files[@]}" "$@"

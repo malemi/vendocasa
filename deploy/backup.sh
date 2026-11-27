@@ -27,7 +27,9 @@ umask 077
 mkdir -p "$dir"
 
 compose() { "$here/compose.sh" "$project" "$@"; }
-free_gb() { df -BG --output=avail "$dir" | tail -1 | tr -dc '0-9'; }
+# In bytes: `df -BG` rounds up, and would pass the floor with up to 1 GiB less.
+free_bytes() { df -B1 --output=avail "$dir" | tail -1 | tr -dc '0-9'; }
+gib() { awk -v b="$1" 'BEGIN { printf "%.2f GiB", b / 1073741824 }'; }
 log() { echo "backup.sh $(date -u +%FT%TZ) $project $mode: $*" >&2; }
 
 count_sql="SELECT table_schema || '.' || table_name, (xpath('/row/c/text()', query_to_xml(format('SELECT count(*) AS c FROM %I.%I', table_schema, table_name), false, true, '')))[1]::text FROM information_schema.tables WHERE table_schema IN ('app', 'auth', 'omi') AND table_type = 'BASE TABLE' ORDER BY 1"
@@ -36,9 +38,9 @@ dump() {
   local kind=$1
   shift
   local free
-  free=$(free_gb)
-  if [ "$free" -lt "$floor_gb" ]; then
-    log "refusing: ${free} GB free, below the ${floor_gb} GB floor"
+  free=$(free_bytes)
+  if [ "$free" -lt $((floor_gb * 1073741824)) ]; then
+    log "refusing: $(gib "$free") free, below the ${floor_gb} GiB floor"
     exit 4
   fi
   local stamp target partial
@@ -47,7 +49,7 @@ dump() {
   partial="$dir/.$kind-$stamp.partial"
   compose exec -T db pg_dump -U supabase_admin -d postgres -Fc "$@" > "$partial"
   mv "$partial" "$target"
-  log "wrote $(basename "$target"), $(du -h "$target" | cut -f1); free disk ${free} GB before"
+  log "wrote $(basename "$target"), $(du -h "$target" | cut -f1); free disk $(gib "$free") before"
   echo "$target"
 }
 

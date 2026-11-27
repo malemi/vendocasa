@@ -57,13 +57,20 @@ PROJECTS = {
 OPERATOR_KEYS = ("ANTHROPIC_API_KEY", "SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "SMTP_SENDER")
 
 
+def unquote(value: str) -> str:
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+        return value[1:-1]
+    return value
+
+
 def read_env(path: Path) -> dict[str, str]:
     values: dict[str, str] = {}
     if path.exists():
         for line in path.read_text().splitlines():
             key, sep, value = line.partition("=")
             if sep and not key.strip().startswith("#"):
-                values[key.strip()] = value.strip()
+                values[key.strip()] = unquote(value)
     return values
 
 
@@ -74,11 +81,15 @@ def write_private(path: Path, text: str) -> None:
     os.chmod(path, 0o600)
 
 
-def write_env(path: Path, values: dict[str, str]) -> None:
+def write_env(path: Path, values: dict[str, str], quoted: bool = True) -> None:
+    """Write KEY=value lines. Quoted: single quotes, which Compose takes literally,
+    so a `$` or ` #` in an operator's password reaches the service unchanged.
+    The status files stay unquoted for their own readers (serve.py, stack.ts)."""
     for key, value in values.items():
-        if "\n" in value:
-            raise SystemExit(f"make_secrets.py: {key} contains a newline")
-    write_private(path, "".join(f"{k}={v}\n" for k, v in values.items()))
+        if "\n" in value or "'" in value:
+            raise SystemExit(f"make_secrets.py: {key} contains a newline or a single quote")
+    lines = "".join(f"{k}='{v}'\n" if quoted else f"{k}={v}\n" for k, v in values.items())
+    write_private(path, lines)
     print(f"{path.name}: " + ", ".join(f"{k}({len(v)})" for k, v in values.items()))
 
 
@@ -221,13 +232,13 @@ def main(argv: list[str] | None = None) -> int:
             "ISSUER_BASE_URL": public_url,
             "MAILPIT_URL": "http://mailpit:8025",
             **common,
-        })
+        }, quoted=False)
         write_env(directory / "status.host.env", {
             "API_URL": f"http://127.0.0.1:{settings['admin_port']}",
             "APP_URL": public_url,
             "MAILPIT_URL": f"http://127.0.0.1:{settings['mailpit_port']}",
             **common,
-        })
+        }, quoted=False)
     return 0
 
 

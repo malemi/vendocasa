@@ -67,7 +67,10 @@ def read_env(path: Path) -> dict[str, str]:
     for line in path.read_text().splitlines():
         key, sep, value = line.partition("=")
         if sep:
-            values[key.strip()] = value.strip()
+            value = value.strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+                value = value[1:-1]
+            values[key.strip()] = value
     return values
 
 

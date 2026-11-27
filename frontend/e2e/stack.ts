@@ -8,7 +8,7 @@
  * External mode: when E2E_APP_URL is set, the journeys start no servers and
  * drive an already running deployment, such as the server rehearsal
  * (deploy/compose.rehearsal.yaml), where the app and its API share that one
- * origin. The status file then comes from deploy/make_make_secrets.py: its API_URL is the
+ * origin. The status file then comes from deploy/make_secrets.py: its API_URL is the
  * address of Auth's admin calls, and MAILPIT_URL the rehearsal's mail catcher.
  */
 

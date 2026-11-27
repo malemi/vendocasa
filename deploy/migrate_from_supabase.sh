@@ -38,7 +38,9 @@ chmod 700 "$work"
 log() { echo "migrate_from_supabase.sh $(date -u +%FT%TZ): $*"; }
 
 if [ -z "${SOURCE_DATABASE_URL:-}" ]; then
-  SOURCE_DATABASE_URL=$(sed -n 's/^SUPABASE_SOURCE_DATABASE_URL=//p' "$HOME/.config/vendocasa/secrets.env" 2>/dev/null || true)
+  # One pair of surrounding quotes, single or double, is not part of the value.
+  SOURCE_DATABASE_URL=$(sed -n 's/^SUPABASE_SOURCE_DATABASE_URL=//p' "$HOME/.config/vendocasa/secrets.env" 2>/dev/null |
+    sed -E "s/^'(.*)'\$/\1/; s/^\"(.*)\"\$/\1/" || true)
 fi
 if [ -z "$SOURCE_DATABASE_URL" ]; then
   echo "migrate_from_supabase.sh: no source database URL" >&2
