@@ -1,0 +1,184 @@
+# The server deployment: PostgreSQL with PostGIS, Supabase Auth, the backend
+# and the web gateway. Only the gateway publishes a port, on loopback; the host
+# Caddy (host-site.caddy) serves the public hostname in front of it.
+#
+# Run it through deploy/compose.sh, which passes the project name, the
+# project's compose.env and the default builder. Every per-project value comes
+# from compose.env, and every secret from the per-service environment files
+# beside it, all written by deploy/make_secrets.py. Validate with
+# `docker compose config -q`: plain `config` prints the files' values.
+#
+# The rehearsal adds compose.rehearsal.yaml, and compose.harness.yaml for the
+# browser journeys.
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-hardening: &hardening
+  security_opt: ["no-new-privileges:true"]
+  restart: unless-stopped
+  logging: *logging
+
+services:
+  db:
+    <<: *hardening
+    image: public.ecr.aws/supabase/postgres@sha256:0b64586fb84124b9070525a6528616594a1aa84a75d84cd4c3d43acc8de3ba92
+    env_file: ["${VENDOCASA_SECRETS_DIR:?}/db.env"]
+    volumes:
+      - vendocasa-db:/var/lib/postgresql/data
+      - ./db/99-roles.sql:/etc/postgresql.schema.sql:ro
+    networks: [data]
+    shm_size: 256m
+    mem_limit: 1g
+    pids_limit: 256
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -h localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  auth:
+    <<: *hardening
+    image: public.ecr.aws/supabase/gotrue@sha256:ba8c0c82c574756c835c696df2a2c698020cc408a42034013d3712e34de7964d
+    depends_on:
+      db: {condition: service_healthy}
+    # GOTRUE_DB_DATABASE_URL, GOTRUE_JWT_SECRET and the SMTP settings.
+    env_file: ["${VENDOCASA_SECRETS_DIR:?}/auth.env"]
+    # The local stack's settings (supabase/config.toml, as Supabase CLI 3.4.0
+    # passes them to this GoTrue version), on the public hostname, plus the
+    # rate-limit header and the longest one-time code. docs/deployment.md.
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: "9999"
+      API_EXTERNAL_URL: ${PUBLIC_URL:?}/auth/v1
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_MAX_POOL_SIZE: "10"
+      GOTRUE_DB_MAX_IDLE_POOL_SIZE: "10"
+      GOTRUE_DB_MIGRATIONS_PATH: /usr/local/etc/auth/migrations
+      GOTRUE_SITE_URL: ${PUBLIC_URL:?}
+      GOTRUE_URI_ALLOW_LIST: ${PUBLIC_URL:?}
+      GOTRUE_DISABLE_SIGNUP: "false"
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_EXP: "3600"
+      GOTRUE_JWT_ISSUER: ${PUBLIC_URL:?}/auth/v1
+      GOTRUE_JWT_VALID_METHODS: HS256
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      GOTRUE_EXTERNAL_PHONE_ENABLED: "false"
+      GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED: "false"
+      GOTRUE_EXTERNAL_WEB3_ETHEREUM_ENABLED: "false"
+      GOTRUE_EXTERNAL_WEB3_SOLANA_ENABLED: "false"
+      GOTRUE_MAILER_AUTOCONFIRM: "false"
+      GOTRUE_MAILER_SECURE_EMAIL_CHANGE_ENABLED: "true"
+      GOTRUE_MAILER_OTP_EXP: "3600"
+      GOTRUE_MAILER_OTP_LENGTH: "10"
+      GOTRUE_MAILER_URLPATHS_CONFIRMATION: ${PUBLIC_URL:?}/auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_INVITE: ${PUBLIC_URL:?}/auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_RECOVERY: ${PUBLIC_URL:?}/auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: ${PUBLIC_URL:?}/auth/v1/verify
+      GOTRUE_SMTP_MAX_FREQUENCY: 60s
+      GOTRUE_SMTP_SENDER_NAME: VendoCasa
+      GOTRUE_SMS_AUTOCONFIRM: "false"
+      GOTRUE_MFA_TOTP_ENROLL_ENABLED: "false"
+      GOTRUE_MFA_TOTP_VERIFY_ENABLED: "false"
+      GOTRUE_MFA_PHONE_ENROLL_ENABLED: "false"
+      GOTRUE_MFA_PHONE_VERIFY_ENABLED: "false"
+      GOTRUE_MFA_WEB_AUTHN_ENROLL_ENABLED: "false"
+      GOTRUE_MFA_WEB_AUTHN_VERIFY_ENABLED: "false"
+      GOTRUE_RATE_LIMIT_HEADER: X-Forwarded-For
+      GOTRUE_RATE_LIMIT_EMAIL_SENT: "20"
+      GOTRUE_RATE_LIMIT_OTP: "30"
+      GOTRUE_RATE_LIMIT_VERIFY: "30"
+      GOTRUE_RATE_LIMIT_TOKEN_REFRESH: "150"
+      GOTRUE_RATE_LIMIT_ANONYMOUS_USERS: "30"
+      GOTRUE_RATE_LIMIT_SMS_SENT: "30"
+      GOTRUE_SECURITY_REFRESH_TOKEN_ROTATION_ENABLED: "true"
+      GOTRUE_SECURITY_REFRESH_TOKEN_REUSE_INTERVAL: "10"
+      GOTRUE_SECURITY_MANUAL_LINKING_ENABLED: "false"
+      GOTRUE_HOOK_BEFORE_USER_CREATED_ENABLED: "true"
+      GOTRUE_HOOK_BEFORE_USER_CREATED_URI: pg-functions://postgres/app/before_user_created
+    networks: [data, edge]
+    read_only: true
+    cap_drop: [ALL]
+    mem_limit: 128m
+    pids_limit: 64
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9999/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    <<: *hardening
+    image: vendocasa-backend:${BACKEND_TAG:-unbuilt}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    depends_on:
+      db: {condition: service_healthy}
+      auth: {condition: service_healthy}
+    # DATABASE_URL, ANTHROPIC_API_KEY, SUPABASE_JWT_SECRET and OWNER_USER_ID.
+    env_file: ["${VENDOCASA_SECRETS_DIR:?}/backend.env"]
+    environment:
+      SUPABASE_URL: ${PUBLIC_URL:?}
+      SUPABASE_JWT_ALGORITHM: HS256
+      CORS_ORIGINS: ${PUBLIC_URL:?}
+    networks: [data, edge]
+    read_only: true
+    tmpfs: ["/tmp"]
+    cap_drop: [ALL]
+    mem_limit: 768m
+    pids_limit: 128
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+  web:
+    <<: *hardening
+    image: vendocasa-web:${WEB_TAG:-unbuilt}
+    build:
+      context: ..
+      dockerfile: deploy/web.Dockerfile
+      args:
+        VITE_SUPABASE_URL: ${PUBLIC_URL:?}
+        VITE_SUPABASE_ANON_KEY: ${ANON_KEY:?}
+    depends_on:
+      backend: {condition: service_healthy}
+      auth: {condition: service_healthy}
+    environment:
+      TRUSTED_PROXY: ${EDGE_GATEWAY:?}/32
+    ports:
+      - "127.0.0.1:${WEB_PORT:?}:8080"
+    networks: [edge]
+    read_only: true
+    tmpfs: ["/config", "/data"]
+    cap_drop: [ALL]
+    mem_limit: 128m
+    pids_limit: 64
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+networks:
+  # No route out: only db, auth and backend.
+  data:
+    internal: true
+  # The model provider, the geocoders and SMTP. A fixed subnet, so the
+  # gateway can trust exactly its gateway address (gateway.Caddyfile).
+  edge:
+    ipam:
+      config:
+        - subnet: ${EDGE_SUBNET:?}
+          gateway: ${EDGE_GATEWAY:?}
+
+volumes:
+  vendocasa-db: {}

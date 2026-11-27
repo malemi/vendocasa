@@ -1,0 +1,21 @@
+# Build contexts carry source only: no history, dependencies, local state or secrets.
+.git
+**/node_modules
+**/.venv
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.ruff_cache
+**/.env
+**/.env.*
+!**/.env.example
+frontend/dist
+frontend/test-results
+frontend/playwright-report
+supabase/.branches
+supabase/.temp
+backend/data/*.zip
+backend/data/*.csv
+backend/data/*.kml
+docs
+.local

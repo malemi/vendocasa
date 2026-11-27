@@ -1,0 +1,72 @@
+# The web gateway of the server deployment (deploy/compose.yaml).
+#
+# :8080, published on loopback only, serves the built frontend and routes
+# /api to the backend and /auth/v1 to Auth. The host Caddy (host-site.caddy)
+# or, in the rehearsal, its stand-in is the only client.
+#
+# Client addresses: the gateway trusts exactly one proxy, TRUSTED_PROXY, the
+# address from which Docker's userland proxy relays every connection to the
+# published port: the edge network's gateway. With trusted_proxies_strict,
+# {client_ip} is then the rightmost forwarded address that is not that proxy,
+# which is the address the host Caddy observed. Caddy's private_ranges cannot
+# be used: it includes 127.0.0.0/8 and the private ranges, so a client with
+# such an address would be skipped and every request would collapse to the
+# proxy's address. The gateway REPLACES X-Forwarded-For with {client_ip}, so
+# the backend and Auth receive exactly one address.
+{
+	admin off
+	auto_https off
+	servers {
+		trusted_proxies static {$TRUSTED_PROXY}
+		client_ip_headers X-Forwarded-For
+		trusted_proxies_strict
+	}
+}
+
+:8080 {
+	route {
+		# No Supabase API other than Auth exists here, and the admin API is
+		# never served on this listener. These answer 404 before any
+		# fallback to the single-page app.
+		@unserved path /auth/v1/admin /auth/v1/admin/* /rest/* /graphql/* /storage/* /realtime/* /functions/* /pg/*
+		respond @unserved 404
+
+		handle /api/* {
+			request_body {
+				max_size 7MB
+			}
+			reverse_proxy backend:8000 {
+				header_up X-Forwarded-For {client_ip}
+			}
+		}
+
+		handle_path /auth/v1/* {
+			request_body {
+				max_size 64KB
+			}
+			reverse_proxy auth:9999 {
+				header_up X-Forwarded-For {client_ip}
+			}
+		}
+
+		handle {
+			root * /srv
+			encode gzip
+			try_files {path} /index.html
+			file_server
+		}
+	}
+}
+
+# Auth with its admin API, for the rehearsal's harness only. Reachable on the
+# edge network; production publishes nothing for it.
+:8081 {
+	route {
+		handle_path /auth/v1/* {
+			reverse_proxy auth:9999 {
+				header_up X-Forwarded-For {client_ip}
+			}
+		}
+		respond 404
+	}
+}

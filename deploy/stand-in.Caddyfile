@@ -1,0 +1,10 @@
+# The rehearsal's stand-in for the host Caddy (deploy/compose.rehearsal.yaml).
+# It runs the rendered host-site.caddy on the host network, on loopback only,
+# and never touches the host Caddy's admin port 2019.
+{
+	admin off
+	auto_https off
+	default_bind 127.0.0.1
+}
+
+import /etc/caddy/host-site.caddy

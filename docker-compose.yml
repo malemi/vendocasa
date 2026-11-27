@@ -6,7 +6,8 @@ services:
       POSTGRES_USER: vendocasa
       POSTGRES_PASSWORD: vendocasa
     ports:
-      - "5432:5432"
+      # Loopback only: this development database uses a fixed password.
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
 

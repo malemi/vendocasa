@@ -1,0 +1,65 @@
+# Probe the server deployment from outside the server: a GitHub-hosted runner
+# checks named ports and public routes of the given hostname. Run it by hand
+# after a deploy: gh workflow run exposure-probe.yml -f hostname=<hostname>
+# It sends no credential and changes nothing. Other services on the same
+# server (for example SSH) are recorded, not judged.
+name: Exposure probe
+
+on:
+  workflow_dispatch:
+    inputs:
+      hostname:
+        description: "The deployment's public hostname"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      HOST: ${{ inputs.hostname }}
+    steps:
+      - name: Ports that must be closed
+        run: |
+          set -u
+          failed=0
+          # The database, Auth, the backend, the gateway's listeners, the
+          # deployment's loopback ports and the Supabase CLI's local ports.
+          for port in 5432 8000 8080 8081 8094 8095 8096 8097 8098 8099 9999 $(seq 54320 54329); do
+            if timeout 6 bash -c "exec 3<>/dev/tcp/$HOST/$port" 2>/dev/null; then
+              echo "OPEN   $port (must be closed)"; failed=1
+            else
+              echo "closed $port"
+            fi
+          done
+          exit $failed
+      - name: Other open ports, recorded only
+        run: |
+          for port in 22 18443 18444; do
+            if timeout 6 bash -c "exec 3<>/dev/tcp/$HOST/$port" 2>/dev/null; then
+              echo "open   $port (another service)"
+            else
+              echo "closed $port"
+            fi
+          done
+      - name: HTTPS serves the site, HTTP redirects to it
+        run: |
+          set -eu
+          code=$(curl -sS -o /dev/null -w '%{http_code}' "https://$HOST/")
+          echo "GET https://$HOST/ -> $code"; test "$code" = 200
+          redirect=$(curl -sS -o /dev/null -w '%{http_code} %{redirect_url}' "http://$HOST/")
+          echo "GET http://$HOST/ -> $redirect"
+          case "$redirect" in 30[178]" https://$HOST/"*) ;; *) exit 1 ;; esac
+      - name: No database API, no admin API
+        run: |
+          set -eu
+          for path in /rest/v1/ /graphql/v1 /storage/v1/object/x /auth/v1/admin/users; do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' "https://$HOST$path")
+            echo "GET $path -> $code"; test "$code" = 404
+          done
+          code=$(curl -sS -o /dev/null -w '%{http_code}' "https://$HOST/api/transactions")
+          echo "GET /api/transactions without a token -> $code"; test "$code" = 401

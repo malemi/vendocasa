@@ -1,0 +1,14 @@
+# The host Caddy's site for VendoCasa. deploy/make_secrets.py renders it into the
+# project's secrets directory, replacing SITE_ADDRESS and UPSTREAM:
+# - production: the public hostname, and the gateway's 127.0.0.1:8094;
+# - rehearsal: the stand-in's http://127.0.0.1:8098, and 127.0.0.1:8095.
+# In production the rendered file is installed as /etc/caddy/vendocasa.caddy
+# and imported by /etc/caddy/Caddyfile.
+#
+# The host Caddy trusts no proxy, so it replaces any X-Forwarded-For a visitor
+# sends with the address it observed. Auth's admin API is never served here.
+SITE_ADDRESS {
+	@admin path /auth/v1/admin /auth/v1/admin/*
+	respond @admin 404
+	reverse_proxy UPSTREAM
+}

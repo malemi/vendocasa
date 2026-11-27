@@ -196,9 +196,15 @@ def get_client_ip(request: Request) -> str:
     and a forged one alone reopens the bypass whenever XFF is absent from a
     request that reaches this process directly. The rightmost XFF hop needs
     no such assumption -- under any appending proxy it is written by the
-    last hop, not the caller -- and Vendocasa has no CDN in front of
-    Railway, so there is no multi-proxy scenario where it would degrade to
-    a shared proxy IP.
+    last hop, not the caller.
+
+    On the server deployment (deploy/compose.yaml) two proxies stand in
+    front: the host Caddy, which trusts no proxy and so replaces any
+    caller-written header with the address it observed, and the gateway
+    (deploy/gateway.Caddyfile), which trusts only the host Caddy's hop and
+    REPLACES the header with that one address. This process therefore sees a
+    single entry, the visitor's, and never a proxy's or a forged one. The
+    backend itself publishes no port, so no request reaches it any other way.
 
     Preference order:
       1. The RIGHTMOST `X-Forwarded-For` entry -- the last hop appended by

@@ -1,0 +1,47 @@
+# The loopback rehearsal (project vendocasa-rehearsal): the production
+# definition plus a mail catcher, the gateway's admin listener on loopback,
+# and a stand-in for the host Caddy. Its volumes, networks and secrets are its
+# own; `deploy/compose.sh vendocasa-rehearsal down -v` removes them.
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  mailpit:
+    image: public.ecr.aws/supabase/mailpit@sha256:ed9b00c609e77e99c79b93f1178255ebc271868920f2c69a8d166bd5634ed10d
+    networks: [edge]
+    ports:
+      - "127.0.0.1:${MAILPIT_PORT:?}:8025"
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 128m
+    pids_limit: 64
+    logging: *logging
+
+  auth:
+    depends_on:
+      mailpit: {condition: service_started}
+
+  web:
+    ports:
+      - "127.0.0.1:${ADMIN_PORT:?}:8081"
+
+  # The host Caddy's role, on the host network and loopback only: the gateway's
+  # image, whose Caddy runs unprivileged, with the rendered host site.
+  standin:
+    image: vendocasa-web:${WEB_TAG:-unbuilt}
+    network_mode: host
+    depends_on:
+      web: {condition: service_healthy}
+    volumes:
+      - ./stand-in.Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${VENDOCASA_SECRETS_DIR:?}/host-site.caddy:/etc/caddy/host-site.caddy:ro
+    read_only: true
+    tmpfs: ["/config", "/data"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 64m
+    pids_limit: 64
+    logging: *logging

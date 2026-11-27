@@ -1,0 +1,18 @@
+# The rehearsal's backend for the browser journeys: backend/tests/e2e/serve.py,
+# which seeds a synthetic semester and replaces the model provider and the
+# public geocoders with deterministic substitutes. Never used in production.
+#
+# The status file is the project owner's 0600 file, so this container runs as
+# that owner (UID 1001) to read it.
+
+services:
+  backend:
+    command: ["python", "-m", "tests.e2e.serve"]
+    user: "1001:1001"
+    environment:
+      SUPABASE_STATUS_ENV: /run/vendocasa/status.container.env
+      E2E_API_HOST: 0.0.0.0
+      E2E_API_PORT: "8000"
+    volumes:
+      - ../backend/tests:/app/tests:ro
+      - ${VENDOCASA_SECRETS_DIR:?}/status.container.env:/run/vendocasa/status.container.env:ro

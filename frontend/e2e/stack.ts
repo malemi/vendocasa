@@ -4,12 +4,19 @@
  *
  * E2E_SUPABASE_STATUS_ENV names the file that `npx supabase@3.4.0 status -o env`
  * printed for the stack. Its keys are the stack's own development keys.
+ *
+ * External mode: when E2E_APP_URL is set, the journeys start no servers and
+ * drive an already running deployment, such as the server rehearsal
+ * (deploy/compose.rehearsal.yaml), where the app and its API share that one
+ * origin. The status file then comes from deploy/make_make_secrets.py: its API_URL is the
+ * address of Auth's admin calls, and MAILPIT_URL the rehearsal's mail catcher.
  */
 
 import { readFileSync } from "node:fs";
 
-export const API_URL = "http://127.0.0.1:8000";
-export const APP_URL = "http://127.0.0.1:4173";
+export const EXTERNAL_APP_URL = process.env.E2E_APP_URL || undefined;
+export const API_URL = EXTERNAL_APP_URL ?? "http://127.0.0.1:8000";
+export const APP_URL = EXTERNAL_APP_URL ?? "http://127.0.0.1:4173";
 export const OWNER_EMAIL = "owner@vendocasa.test";
 
 /** Micro-dollars one substitute model call costs (backend/tests/e2e/substitute.py). */

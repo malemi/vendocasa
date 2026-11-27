@@ -1,0 +1,11 @@
+# Build contexts carry source only (see the root .dockerignore).
+.venv
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.ruff_cache
+.env
+.env.*
+data/*.zip
+data/*.csv
+data/*.kml

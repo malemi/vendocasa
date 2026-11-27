@@ -3,11 +3,21 @@
     SUPABASE_STATUS_ENV=/path/to/status.env .venv/bin/python -m tests.e2e.serve
 
 The status file holds what `npx supabase@3.4.0 status -o env` prints for the
-local stack (supabase/config.toml); its database must already be migrated
-(`alembic upgrade head`). The server seeds the stack (tests/e2e/seed.py),
-replaces the model provider and the public geocoders with
-tests/e2e/substitute.py, and serves the API on 127.0.0.1:8000 with one
-worker, as production does. Tokens are verified against the stack's JWKS.
+local stack (supabase/config.toml), or the equivalent file that
+deploy/make_secrets.py writes for the server rehearsal (deploy/compose.rehearsal.yaml).
+Its database must already be migrated (`alembic upgrade head`). The server
+seeds the stack (tests/e2e/seed.py), replaces the model provider and the
+public geocoders with tests/e2e/substitute.py, and serves the API with one
+worker, as production does.
+
+Status keys beyond the CLI's:
+- JWT_ALGORITHM: the token algorithm, ES256 (the CLI stack's JWKS) by default;
+  HS256 verifies against JWT_SECRET, as the server rehearsal does.
+- ISSUER_BASE_URL: the backend's SUPABASE_URL, whose `/auth/v1` is the token
+  issuer. It defaults to API_URL, which stays the address of the admin calls;
+  inside the rehearsal's backend container the two differ.
+
+E2E_API_HOST and E2E_API_PORT set the listen address (127.0.0.1:8000 by default).
 
 Two settings differ from production, for the journeys only: request quotas
 are higher, so a journey can fill a conversation to its 50-message limit, and
@@ -33,13 +43,14 @@ def load_status(path: str) -> dict[str, str]:
 
 def main() -> int:
     status = load_status(os.environ["SUPABASE_STATUS_ENV"])
+    algorithm = status.get("JWT_ALGORITHM", "ES256")
     # Settings are read when app.config is first imported, so the environment
     # comes first.
     os.environ.update({
         "DATABASE_URL": status["DB_URL"],
-        "SUPABASE_URL": status["API_URL"],
-        "SUPABASE_JWT_ALGORITHM": "ES256",
-        "SUPABASE_JWT_SECRET": "",
+        "SUPABASE_URL": status.get("ISSUER_BASE_URL", status["API_URL"]),
+        "SUPABASE_JWT_ALGORITHM": algorithm,
+        "SUPABASE_JWT_SECRET": status["JWT_SECRET"] if algorithm == "HS256" else "",
         "ANTHROPIC_API_KEY": "e2e-substitute-never-sent",
         "CORS_ORIGINS": "http://127.0.0.1:4173,http://localhost:4173",
         "RATE_LIMIT_PER_MINUTE": "200",
@@ -64,7 +75,12 @@ def main() -> int:
 
     from app.main import app
 
-    uvicorn.run(app, host="127.0.0.1", port=int(os.environ.get("E2E_API_PORT", "8000")), workers=1)
+    uvicorn.run(
+        app,
+        host=os.environ.get("E2E_API_HOST", "127.0.0.1"),
+        port=int(os.environ.get("E2E_API_PORT", "8000")),
+        workers=1,
+    )
     return 0
 
 
